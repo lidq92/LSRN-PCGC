@@ -14,9 +14,9 @@ from PCSRmodel import PCSRModelSiren
 from torch.utils.data import DataLoader
 from torch.optim import Adam, lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
-from PCSRdataset import get_data_loaders, PCSRfDataset
+from PCSRdataset import PCSRDataset, PCSRfDataset
 from PCSRperformance import PCSRPerformance, PCSRPerformance1
-from modified_ignite_engine import create_supervised_evaluator, create_supervised_trainer
+from modified_ignite_engine import create_supervised_evaluator, create_supervised_validator, create_supervised_trainer
 
 
 metrics_printed = ['mAcc']
@@ -43,7 +43,9 @@ def train(args):
         current_path = os.path.abspath(__file__)
         father_path = os.path.abspath(os.path.dirname(current_path) + os.path.sep + ".")
         print(father_path)
-        _, val_loader = get_data_loaders(args)
+        test_dataset = PCSRDataset(args, status='test')
+        test_loader = DataLoader(test_dataset, num_workers=16, pin_memory=True)    
+
         logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
         with open(args.trained_model_file+'_cbytes.bin',"rb") as f: compressed_bytes = f.read()
         params = fpzip.decompress(compressed_bytes, order='C')[0][0][0]
@@ -55,9 +57,9 @@ def train(args):
             k = k + model.state_dict()[param_tensor].numel()
         model.load_state_dict(state_dict)
         computePSNR = False if nscale else True #
-        evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args,nscale, computePSNR)}, device=device)
+        evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args, nscale, computePSNR)}, device=device)
 
-        evaluator.run(val_loader)
+        evaluator.run(test_loader)
         performance = evaluator.state.metrics
         for metric_print in metrics_printed:
             logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric_print, performance[metric_print].item()))
@@ -66,7 +68,7 @@ def train(args):
         if nscale:
             dataset = PCSRfDataset(args, nscale-1)
             loader = DataLoader(dataset)
-            evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args,nscale-1)}, device=device)
+            evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args, nscale-1)}, device=device)
             evaluator.run(loader)
             performance = evaluator.state.metrics
             for metric_print in metrics_printed:
@@ -95,13 +97,17 @@ def train(args):
             logger.log.info(r)
         return
     else:
-        train_loader, val_loader = get_data_loaders(args)
+        train_dataset = PCSRDataset(args, status='train')
+        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, 
+                                  num_workers=16, pin_memory=True)  
+        val_loader = DataLoader(train_dataset, batch_size=5*args.batch_size, 
+                                num_workers=16, pin_memory=True)    
 
     optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay) 
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
     loss_func = PCSRLoss()
-    trainer = create_supervised_trainer(model, optimizer, loss_func, device=device, div_steps=args.iters_per_pc)
-    evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance()}, device=device)
+    trainer = create_supervised_trainer(model, optimizer, loss_func, device=device)
+    evaluator = create_supervised_validator(model, metrics={'PCSR_performance': PCSRPerformance()}, device=device)
 
     current_time = datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
     writer = SummaryWriter(log_dir='runs/{}-{}'.format(args.format_str, current_time))
@@ -116,7 +122,7 @@ def train(args):
     @trainer.on(Events.EPOCH_COMPLETED)
     def epoch_event_function(engine):
         scheduler.step()
-        if True: # engine.state.epoch % 5 == 0: #
+        if engine.state.epoch % 5 == 0: # True: # 
             evaluator.run(val_loader)
             performance = evaluator.state.metrics
             writer_add_scalar(writer, 'val', args.dataset, performance, engine.state.epoch)
@@ -148,30 +154,6 @@ def train(args):
         f.write(compressed_bytes)
         f.close()
         logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
-        # params_dec = fpzip.decompress(compressed_bytes, order='C')[0][0][0]
-        # k = 0
-        # state_dict = {}
-        # for param_tensor in model.state_dict():
-        #     values = params_dec[k:k+model.state_dict()[param_tensor].numel()].reshape(model.state_dict()[param_tensor].size())
-        #     state_dict[param_tensor] = torch.from_numpy(values)
-        #     k = k + model.state_dict()[param_tensor].numel()
-        # model.load_state_dict(state_dict)
-        # evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args,nscale)}, device=device)
-        # evaluator.run(val_loader)
-        # performance = evaluator.state.metrics
-        # for metric_print in metrics_printed:
-        #     logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric_print, performance[metric_print].item()))
-        # np.save(args.save_result_file, performance)
-
-        # if nscale:
-        #     dataset = PCSRfDataset(args, nscale-1)
-        #     loader = DataLoader(dataset)
-        #     evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args,nscale-1)}, device=device)
-        #     evaluator.run(loader)
-        #     performance = evaluator.state.metrics
-        #     for metric_print in metrics_printed:
-        #         logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric_print, performance[metric_print].item()))
-        #     np.save(args.save_result_file, performance)
 
     trainer.run(train_loader, max_epochs=args.epochs)
 
@@ -208,8 +190,8 @@ if __name__ == "__main__":
     
     parser.add_argument('-lr', '--learning_rate', type=float, default=1e-3,
                         help='learning rate (default: 1e-3)')
-    parser.add_argument('-ipp', '--iters_per_pc', type=int, default=200,
-                        help='iters_per_pc (default: 200)')
+    parser.add_argument('-bs', '--batch_size', type=int, default=2048,
+                        help='batch size (default: 2048)')
     parser.add_argument('-e', '--epochs', type=int, default=150,
                         help='number of epochs to train (default: 150)')
     parser.add_argument('-wd', '--weight_decay', type=float, default=0,
@@ -238,9 +220,9 @@ if __name__ == "__main__":
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
 
-    args.format_str = '{}__bc{}_K{}_lr{}_nF{}_ipp{}_e{}_{}_pqs{}'
+    args.format_str = '{}__bc{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
     args.format_str = args.format_str.format(args.model, args.base_channel, args.K, 
-                                             args.learning_rate, args.nF, args.iters_per_pc, args.epochs, 
+                                             args.learning_rate, args.nF, args.batch_size, args.epochs, 
                                              args.dataset, args.pqs)
     if not os.path.exists('checkpoints'):
         os.makedirs('checkpoints')

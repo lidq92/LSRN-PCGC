@@ -12,19 +12,21 @@ class PCSRPerformance(Metric):
         super(PCSRPerformance, self).__init__()
 
     def reset(self):
-        self._acc  = []
+        self._count   = 0
+        self._n       = 0
 
     def update(self, output):
-        y_pred, (y, _, _) = output
+        y_pred, y = output
         idx1 = y_pred.max(dim=1)[0] >= 0.5
         idx2 = y_pred.max(dim=1)[0] < 0.5
         y_pred[idx1] = (y_pred[idx1]>=0.5).float() 
         y_pred[idx2] = (y_pred[idx2]>=y_pred.max()).float() #
-        self._acc.append((y_pred*y+(1-y_pred)*(1-y)).sum().item() / y.numel())
+        self._count += (y_pred*y+(1-y_pred)*(1-y)).sum().item()
+        self._n     +=  y.numel()
         
     def compute(self):
-        return {'mAcc': np.asarray(self._acc).mean(),
-                'acc': np.asarray(self._acc)
+        return {
+                'mAcc': np.asarray(self._count/self._n)
                 }
 
 
@@ -50,7 +52,7 @@ class PCSRPerformance1(Metric):
         idx1 = y_pred.max(dim=1)[0] >= 0.5
         idx2 = y_pred.max(dim=1)[0] < 0.5
         y_pred[idx1] = (y_pred[idx1] >= 0.5).float() 
-        y_pred[idx2] = (y_pred[idx2] >=y_pred.max()).float() #
+        y_pred[idx2] = (y_pred[idx2] >= y_pred.max()).float() #
         acc = (y_pred*y + (1-y_pred)*(1-y)).sum().item() / y.numel()
         self._acc.append(acc)
 
