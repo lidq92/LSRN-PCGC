@@ -39,10 +39,7 @@ def train(args):
 
     nscale = np.ceil(np.log2(args.pqs/2)).astype(int) # 
     
-    if args.evaluate:            
-        current_path = os.path.abspath(__file__)
-        father_path = os.path.abspath(os.path.dirname(current_path) + os.path.sep + ".")
-        print(father_path)
+    if args.evaluate:    
         test_dataset = PCSRDataset(args, status='test')
         test_loader = DataLoader(test_dataset, num_workers=16, pin_memory=True)    
 
@@ -83,9 +80,9 @@ def train(args):
             dec = base_pc[:-4] + '_dec.ply'
             md5_enc = base_pc[:-4] + '_enc.txt'
             md5_dec = base_pc[:-4] + '_dec.txt'
-            cmd_encode = father_path + '/tmc3 --config=cfg_base/encoder.cfg --uncompressedDataPath=' + base_pc + ' --reconstructedDataPath=' + enc + ' --compressedStreamPath=' + bin + ' --disableAttributeCoding=1'
+            cmd_encode = './tmc3 --config=cfg_base/encoder.cfg --uncompressedDataPath=' + base_pc + ' --reconstructedDataPath=' + enc + ' --compressedStreamPath=' + bin + ' --disableAttributeCoding=1'
             cmd_md5_enc = 'md5sum {} > {}'.format(enc, md5_enc)
-            cmd_decode = father_path + '/tmc3 --config=cfg_base/decoder.cfg --compressedStreamPath=' + bin + ' --reconstructedDataPath=' + dec
+            cmd_decode = './tmc3 --config=cfg_base/decoder.cfg --compressedStreamPath=' + bin + ' --reconstructedDataPath=' + dec
             cmd_md5_dec = 'md5sum {} > {}'.format(dec, md5_dec)
             r = sh(cmd_encode) 
             logger.log.info(r)
