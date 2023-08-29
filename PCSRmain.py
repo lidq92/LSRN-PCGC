@@ -27,8 +27,13 @@ def writer_add_scalar(writer, status, dataset, scalars, iter):
         
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, dim_hidden=args.base_channel, activation=torch.nn.ReLU())
-    model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, dim_hidden=args.base_channel)
+    # model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, 
+    #                        dim_hidden=args.base_channel, 
+    #                        num_layers=args.num_layers
+    #                        activation=torch.nn.ReLU())
+    model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, 
+                           dim_hidden=args.base_channel, 
+                           num_layers=args.num_layers)
     model = model.to(device)
     logger.log.info(model)
     for param_tensor in model.state_dict():
@@ -166,6 +171,8 @@ if __name__ == "__main__":
                         help='Siren')
     parser.add_argument('-bc', '--base_channel', type=int, default=16,
                         help='base channel (default: 16)')
+    parser.add_argument('-nl', '--num_layers', type=int, default=1,
+                        help='Number of layers (default: 1)')
     parser.add_argument('-K', '--K', type=int, default=2,
                         help='neighbors (2K+1)^3-1')
     parser.add_argument('-precision', '--precision', type=int, default=16,
@@ -201,8 +208,12 @@ if __name__ == "__main__":
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-    format_str = '{}_bc{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
-    args.format_str = format_str.format(args.model, args.base_channel, args.K, 
+    # format_str = '{}_bc{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
+    # args.format_str = format_str.format(args.model, args.base_channel, args.K, 
+    #                                     args.learning_rate, args.nF, args.batch_size, args.epochs, 
+    #                                     args.dataset, args.pqs)
+    format_str = '{}_bc{}_nl{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
+    args.format_str = format_str.format(args.model, args.base_channel, args.num_layers, args.K, 
                                         args.learning_rate, args.nF, args.batch_size, args.epochs, 
                                         args.dataset, args.pqs)
     if not os.path.exists('checkpoints'):

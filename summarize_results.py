@@ -2,7 +2,8 @@ import xlwt
 
 
 logpath = 'logs_eval' # 
-format_str = '/Siren_bc16_K2_lr0.001_nF10_bs2048_e150_{}_pqs{}'
+# format_str = '/Siren_bc16_K2_lr0.001_nF10_bs2048_e150_{}_pqs{}'
+format_str = '/Siren_bc16_nl1_K2_lr0.001_nF10_bs2048_e150_{}_pqs{}'
 excel_file = 'LSRN-PCGC.xls'
 
 datasetname_lst = list([
