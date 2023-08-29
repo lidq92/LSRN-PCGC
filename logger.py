@@ -15,7 +15,7 @@ def create_logger(exp_folder, file_name, log_file_only=False):
         log_path = os.path.join(exp_folder, file_name)
         os.makedirs(os.path.split(log_path)[0], exist_ok=True)
         handlers.append(logging.FileHandler(log_path, mode = 'w'))
-    [logging.root.removeHandler(handler) for handler in logging.root.handlers[:]] # remove all existing handlers
+    [logging.root.removeHandler(handler) for handler in logging.root.handlers[:]] 
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', handlers=handlers)
     global log
     log = logging.getLogger()

@@ -10,10 +10,10 @@ import numpy as np
 from PCSRloss import PCSRLoss
 from ignite.engine import Events
 from argparse import ArgumentParser
-from PCSRmodel import PCSRModelSiren
 from torch.utils.data import DataLoader
 from torch.optim import Adam, lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
+from PCSRmodel import PCSRModelSiren
 from PCSRdataset import PCSRDataset, PCSRfDataset
 from PCSRperformance import PCSRPerformance, PCSRPerformance1
 from modified_ignite_engine import create_supervised_evaluator, create_supervised_validator, create_supervised_trainer
@@ -21,13 +21,12 @@ from modified_ignite_engine import create_supervised_evaluator, create_supervise
 
 metrics_printed = ['mAcc']
 def writer_add_scalar(writer, status, dataset, scalars, iter):
-    for metric_print in metrics_printed:
-        writer.add_scalar('{}/{}/{}'.format(status, dataset, metric_print), scalars[metric_print], iter)
+    for metric in metrics_printed:
+        writer.add_scalar('{}/{}/{}'.format(status, dataset, metric), scalars[metric], iter)
 
         
 def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
     # model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, dim_hidden=args.base_channel, activation=torch.nn.ReLU())
     model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, dim_hidden=args.base_channel)
     model = model.to(device)
@@ -42,7 +41,6 @@ def train(args):
     if args.evaluate:    
         test_dataset = PCSRDataset(args, status='test')
         test_loader = DataLoader(test_dataset, num_workers=16, pin_memory=True)    
-
         logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
         with open(args.trained_model_file+'_cbytes.bin',"rb") as f: compressed_bytes = f.read()
         params = fpzip.decompress(compressed_bytes, order='C')[0][0][0]
@@ -55,23 +53,20 @@ def train(args):
         model.load_state_dict(state_dict)
         computePSNR = False if nscale else True #
         evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args, nscale, computePSNR)}, device=device)
-
         evaluator.run(test_loader)
         performance = evaluator.state.metrics
-        for metric_print in metrics_printed:
-            logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric_print, performance[metric_print].item()))
+        for metric in metrics_printed:
+            logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric, performance[metric].item()))
         np.save(args.save_result_file, performance)
-
         if nscale:
             dataset = PCSRfDataset(args, nscale-1)
             loader = DataLoader(dataset)
             evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args, nscale-1)}, device=device)
             evaluator.run(loader)
             performance = evaluator.state.metrics
-            for metric_print in metrics_printed:
-                logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric_print, performance[metric_print].item()))
+            for metric in metrics_printed:
+                logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric, performance[metric].item()))
             np.save(args.save_result_file, performance)
-        
         list_basefile = glob.glob('{}/*base.ply'.format(os.path.abspath(args.output_path)))
         list_basefile.sort()
         for base_pc in list_basefile:
@@ -99,23 +94,19 @@ def train(args):
                                   num_workers=16, pin_memory=True)  
         val_loader = DataLoader(train_dataset, batch_size=5*args.batch_size, 
                                 num_workers=16, pin_memory=True)    
-
     optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay) 
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
     loss_func = PCSRLoss()
     trainer = create_supervised_trainer(model, optimizer, loss_func, device=device)
     evaluator = create_supervised_validator(model, metrics={'PCSR_performance': PCSRPerformance()}, device=device)
-
     current_time = datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
     writer = SummaryWriter(log_dir='runs/{}-{}'.format(args.format_str, current_time))
     global best_val_criterion, best_epoch
     best_val_criterion, best_epoch = 0., -1 
-
     @trainer.on(Events.ITERATION_COMPLETED)
     def iter_event_function(engine):
         writer.add_scalar("train/loss", engine.state.output, engine.state.iteration)
         # logger.log.info("train/loss: {} @{}".format(engine.state.output, engine.state.iteration))
-
     @trainer.on(Events.EPOCH_COMPLETED)
     def epoch_event_function(engine):
         scheduler.step()
@@ -124,17 +115,16 @@ def train(args):
             performance = evaluator.state.metrics
             writer_add_scalar(writer, 'val', args.dataset, performance, engine.state.epoch)
             val_criterion = performance['mAcc']
-
             global best_val_criterion, best_epoch
             if val_criterion > best_val_criterion: 
                 torch.save(model.state_dict(), args.trained_model_file)
                 best_val_criterion = val_criterion
                 best_epoch = engine.state.epoch
-                logger.log.info('Save current best model @best_val_criterion (mAcc): {:.5f} @epoch: {}'.format(best_val_criterion, best_epoch))
+                logger.log.info('Save current best val model (mAcc: {:.5f}) @epoch {}'
+                                .format(best_val_criterion, best_epoch))
             else:
-                logger.log.info('Model is not updated @val_criterion (mAcc): {:.5f} @epoch: {}'.format(val_criterion, engine.state.epoch))           
-
-
+                logger.log.info('Model is not updated (mAcc: {:.5f}) @epoch: {}'
+                                .format(val_criterion, engine.state.epoch))           
     @trainer.on(Events.COMPLETED)
     def final_testing_results(engine):
         writer.close ()  
@@ -151,12 +141,12 @@ def train(args):
         f.write(compressed_bytes)
         f.close()
         logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
-
     trainer.run(train_loader, max_epochs=args.epochs)
 
 
-def sh(cmd, input=""): # https://stackoverflow.com/a/56215593/3865166 to solve the issue that cannot get the stdout of os.system, although a naive method is to expand the cmd with '> tmp.txt' ...
-    rst = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, input=input.encode("utf-8"))
+def sh(cmd, input=""): # Solve the issue that logging cannot get the stdout of os.system
+    rst = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, 
+                         stderr=subprocess.PIPE, input=input.encode("utf-8"))
     assert rst.returncode == 0, rst.stderr.decode("utf-8")
     return rst.stdout.decode("utf-8")
 
@@ -174,8 +164,6 @@ if __name__ == "__main__":
     
     parser.add_argument('-model', '--model', default='Siren', type=str,
                         help='Siren')
-    parser.add_argument('-eval', '--evaluate', action='store_true',
-                        help='Evaluate only?')
     parser.add_argument('-bc', '--base_channel', type=int, default=16,
                         help='base channel (default: 16)')
     parser.add_argument('-K', '--K', type=int, default=2,
@@ -184,6 +172,8 @@ if __name__ == "__main__":
                         help=' (default: 16)')
     parser.add_argument('-nF', '--nF', type=int, default=10,
                         help='#frames (default: 10)')
+    parser.add_argument('-eval', '--evaluate', action='store_true',
+                        help='Evaluate only?')
     
     parser.add_argument('-lr', '--learning_rate', type=float, default=1e-3,
                         help='learning rate (default: 1e-3)')
@@ -198,17 +188,12 @@ if __name__ == "__main__":
     parser.add_argument('-olrd', '--overall_lr_decay', type=float, default=0.01,
                         help='overall lr decay (default: 0.01)')
     args = parser.parse_args()
-    
-    if args.dataset in ['basketball_player_vox11', 'dancer_vox11']: #
-        args.vox = 11
-    else: #
-        args.vox = 10
-
+    # args.vox = 11 if args.dataset in ['basketball_player_vox11', 'dancer_vox11'] else 10
+    args.vox = 11 if 'vox11' in args.dataset else 10 #
     if args.lr_decay == 1 or args.epochs < 3:  # no lr decay
         args.lr_decay_step = args.epochs
     else:  # 
         args.lr_decay_step = int(args.epochs/(1+np.log(args.overall_lr_decay)/np.log(args.lr_decay)))
-        
     if not args.randomness:
         torch.manual_seed(args.seed)  #
         torch.backends.cudnn.deterministic = True
@@ -216,15 +201,13 @@ if __name__ == "__main__":
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-
-    args.format_str = '{}__bc{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
-    args.format_str = args.format_str.format(args.model, args.base_channel, args.K, 
-                                             args.learning_rate, args.nF, args.batch_size, args.epochs, 
-                                             args.dataset, args.pqs)
+    format_str = '{}_bc{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
+    args.format_str = format_str.format(args.model, args.base_channel, args.K, 
+                                        args.learning_rate, args.nF, args.batch_size, args.epochs, 
+                                        args.dataset, args.pqs)
     if not os.path.exists('checkpoints'):
         os.makedirs('checkpoints')
     args.trained_model_file = 'checkpoints/' + args.format_str
-    
     if not os.path.exists('results'):
         os.makedirs('results')
     args.save_result_file = 'results/' + args.format_str
