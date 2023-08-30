@@ -1,25 +1,21 @@
 import os
 import glob
 import torch
-import random
+import psutil
 import datetime
 import numpy as np
 import pandas as pd
+import multiprocessing
 from pyntcloud import PyntCloud
 from torch.utils.data import Dataset
-from multiprocessing import Pool as ThreadPool
-from concurrent.futures import ProcessPoolExecutor
-# from multiprocessing.dummy import Pool as ThreadPool
 
 
 def process(arg):
-    path, pqs, K, output_path = arg
-    starttime = datetime.datetime.now()
+    path, pqs, K, output_path, core_id = arg
+    p = psutil.Process()
+    p.cpu_affinity([core_id])
     ori_pc = PyntCloud.from_file(path)
     ori_points = ori_pc.points.values[:,:3].astype(int)
-    endtime = datetime.datetime.now()
-    print(path, 'io:', endtime-starttime)
-    starttime = datetime.datetime.now()
     if pqs > 2:
         ori_points = np.round(ori_points/(pqs/2)+1e-6).astype(int) # downsample 
         ori_points = np.unique(ori_points, axis=0) # remove duplicated points
@@ -57,9 +53,6 @@ def process(arg):
     name = os.path.splitext(os.path.split(path)[1])[0]
     if not os.path.exists("{}/{}_base.ply".format(output_path, name)):
         cloud.to_file("{}/{}_base.ply".format(output_path, name), as_text=True)
-
-    endtime = datetime.datetime.now()
-    print(path, 'processing:', endtime-starttime)
     return neighs, childs
 
 
@@ -82,17 +75,14 @@ class PCSRDataset(Dataset):
         if self.status == 'train':
             self.neighs = [None] * len(self.paths)
             self.childs = [None] * len(self.paths)
+            num_cores = psutil.cpu_count(logical=False)
             zip_args = list(zip(self.paths, 
                                 [self.pqs]*len(self.paths),
                                 [self.K]*len(self.paths),
-                                [self.output_path]*len(self.paths)
+                                [self.output_path]*len(self.paths),
+                                range(num_cores)
                                 ))
-            # for k, args in enumerate(zip_args):
-            #     self.neighs[k], self.childs[k] = process(args)
-            # with ProcessPoolExecutor() as executor:
-            #     for k, neighschilds in zip(range(len(zip_args)), executor.map(process, zip_args)):
-            #         self.neighs[k], self.childs[k] = neighschilds
-            pool = ThreadPool(20)
+            pool = multiprocessing.Pool(processes=num_cores)
             neighschilds = pool.map(process, zip_args)
             self.neighs = [data[0] for data in neighschilds]
             self.childs = [data[1] for data in neighschilds]
