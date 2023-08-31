@@ -45,7 +45,7 @@ def train(args):
     
     if args.evaluate:    
         test_dataset = PCSRDataset(args, status='test')
-        test_loader = DataLoader(test_dataset, num_workers=16, pin_memory=True)    
+        test_loader = DataLoader(test_dataset, num_workers=32, pin_memory=True)    
         logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
         with open(args.trained_model_file+'_cbytes.bin',"rb") as f: compressed_bytes = f.read()
         params = fpzip.decompress(compressed_bytes, order='C')[0][0][0]
@@ -80,9 +80,10 @@ def train(args):
             dec = base_pc[:-4] + '_dec.ply'
             md5_enc = base_pc[:-4] + '_enc.txt'
             md5_dec = base_pc[:-4] + '_dec.txt'
-            cmd_encode = './tmc3 --config=cfg_base/encoder.cfg --uncompressedDataPath=' + base_pc + ' --reconstructedDataPath=' + enc + ' --compressedStreamPath=' + bin + ' --disableAttributeCoding=1'
+            tmc3 = 'tmc3v22' # 'tmc3'
+            cmd_encode = './' + tmc3 + ' --config=cfg_base/encoder.cfg --uncompressedDataPath=' + base_pc + ' --reconstructedDataPath=' + enc + ' --compressedStreamPath=' + bin + ' --disableAttributeCoding=1'
             cmd_md5_enc = 'md5sum {} > {}'.format(enc, md5_enc)
-            cmd_decode = './tmc3 --config=cfg_base/decoder.cfg --compressedStreamPath=' + bin + ' --reconstructedDataPath=' + dec
+            cmd_decode = './' + tmc3 + ' --config=cfg_base/decoder.cfg --compressedStreamPath=' + bin + ' --reconstructedDataPath=' + dec
             cmd_md5_dec = 'md5sum {} > {}'.format(dec, md5_dec)
             r = sh(cmd_encode) 
             logger.log.info(r)
@@ -96,9 +97,9 @@ def train(args):
     else:
         train_dataset = PCSRDataset(args, status='train')
         train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, 
-                                  num_workers=16, pin_memory=True)  
+                                  num_workers=32, pin_memory=True)  
         val_loader = DataLoader(train_dataset, batch_size=5*args.batch_size, 
-                                num_workers=16, pin_memory=True)    
+                                num_workers=32, pin_memory=True)    
     optimizer = Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay) 
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
     loss_func = PCSRLoss()
@@ -177,8 +178,10 @@ if __name__ == "__main__":
                         help='neighbors (2K+1)^3-1')
     parser.add_argument('-precision', '--precision', type=int, default=16,
                         help=' (default: 16)')
-    parser.add_argument('-nF', '--nF', type=int, default=10,
-                        help='#frames (default: 10)')
+    # parser.add_argument('-nF', '--nF', type=int, default=20,
+    #                     help='#frames (default: 20)')
+    parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=3,
+                        help='#frame sampling rate (default: 3)')
     parser.add_argument('-eval', '--evaluate', action='store_true',
                         help='Evaluate only?')
     
@@ -212,9 +215,13 @@ if __name__ == "__main__":
     # args.format_str = format_str.format(args.model, args.base_channel, args.K, 
     #                                     args.learning_rate, args.nF, args.batch_size, args.epochs, 
     #                                     args.dataset, args.pqs)
-    format_str = '{}_bc{}_nl{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
+    # format_str = '{}_bc{}_nl{}_K{}_lr{}_nF{}_bs{}_e{}_{}_pqs{}'
+    # args.format_str = format_str.format(args.model, args.base_channel, args.num_layers, args.K, 
+    #                                     args.learning_rate, args.nF, args.batch_size, args.epochs, 
+    #                                     args.dataset, args.pqs)
+    format_str = '{}_bc{}_nl{}_K{}_lr{}_fps{}_bs{}_e{}_{}_pqs{}'
     args.format_str = format_str.format(args.model, args.base_channel, args.num_layers, args.K, 
-                                        args.learning_rate, args.nF, args.batch_size, args.epochs, 
+                                        args.learning_rate, args.frame_sampling_rate, args.batch_size, args.epochs, 
                                         args.dataset, args.pqs)
     if not os.path.exists('checkpoints'):
         os.makedirs('checkpoints')

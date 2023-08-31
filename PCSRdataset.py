@@ -70,8 +70,10 @@ class PCSRDataset(Dataset):
         if args.dataset in ['basketball_player_vox11', 'dancer_vox11']:
             self.paths = self.paths[:64] # V-PCC CTC
         if not args.evaluate:
-            nF = args.nF if len(self.paths) > args.nF else len(self.paths)
-            self.paths = [self.paths[i] for i in range(0, len(self.paths), len(self.paths)//nF)]
+            # nF = args.nF if len(self.paths) > args.nF else len(self.paths)
+            # self.paths = [self.paths[i] for i in range(0, len(self.paths), len(self.paths)//nF)]
+            step = args.frame_sampling_rate if len(self.paths) > args.frame_sampling_rate else len(self.paths)
+            self.paths = [self.paths[i] for i in range(0, len(self.paths), step)]
         if self.status == 'train':
             self.neighs = [None] * len(self.paths)
             self.childs = [None] * len(self.paths)
@@ -156,8 +158,10 @@ class PCSRfDataset(Dataset):
         if args.dataset in ['basketball_player_vox11', 'dancer_vox11']:
             self.paths = self.paths[:64] # V-PCC CTC
         if not args.evaluate:
-            nF = args.nF if len(self.paths) > args.nF else len(self.paths)
-            self.paths = [self.paths[i] for i in range(0, len(self.paths), len(self.paths)//nF)]
+            # nF = args.nF if len(self.paths) > args.nF else len(self.paths)
+            # self.paths = [self.paths[i] for i in range(0, len(self.paths), len(self.paths)//nF)]
+            step = args.frame_sampling_rate if len(self.paths) > args.frame_sampling_rate else len(self.paths)
+            self.paths = [self.paths[i] for i in range(0, len(self.paths), step)]
 
     def __len__(self):
         return len(self.paths)
