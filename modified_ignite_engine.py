@@ -6,8 +6,7 @@ from ignite.engine.engine import Engine
 def _prepare_test_batch(batch, device=None, non_blocking=False):
     x, (y, points, name) = batch 
     return (convert_tensor(x[0], device=device, non_blocking=non_blocking), 
-            (convert_tensor(y[0], device=device, non_blocking=non_blocking), 
-            points[0], name[0]))
+            (convert_tensor(y[0], device=device, non_blocking=non_blocking), points[0], name[0]))
 
 
 def _prepare_train_batch(batch, device=None, non_blocking=False):
@@ -19,7 +18,6 @@ def _prepare_train_batch(batch, device=None, non_blocking=False):
 def create_supervised_trainer(model, optimizer, loss_fn, device=None, 
                               non_blocking=False, prepare_batch=_prepare_train_batch):
     if device: model.to(device)
-
     def _update(engine, batch):
         optimizer.zero_grad()
         model.train()
@@ -42,7 +40,6 @@ def create_supervised_validator(model, metrics, device = None,
             x, y = prepare_batch(batch, device=device, non_blocking=non_blocking)
             y_pred = model(x)
             return output_transform(x, y, y_pred)
-
     evaluator = Engine(_inference)
     for metric_name, metric in metrics.items():
         metric.attach(evaluator, metric_name)
@@ -59,7 +56,6 @@ def create_supervised_evaluator(model, metrics, device = None,
             x, (y, points, name) = prepare_batch(batch, device=device, non_blocking=non_blocking)
             y_pred = model(x)
             return output_transform(x, (y, points, name), y_pred)
-
     evaluator = Engine(_inference)
     for metric_name, metric in metrics.items():
         metric.attach(evaluator, metric_name)

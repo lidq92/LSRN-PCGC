@@ -14,7 +14,7 @@ class Sine(nn.Module):
 
 
 class SirenLayer(nn.Module):
-    """Implements a single SIREN layer.
+    '''Implements a single SIREN layer.
     Args:
         dim_in (int): Dimension of input.
         dim_out (int): Dimension of output.
@@ -23,7 +23,7 @@ class SirenLayer(nn.Module):
         is_first (bool): Whether this is first layer of model.
         use_bias (bool): Whether the bias is used
         activation (torch.nn.Module): Activation function. If None, defaults to Sine activation.
-    """
+    '''
     def __init__(self, dim_in, dim_out, w0=30., c=6., 
                  is_first=False, use_bias=True, activation=None):
         super().__init__()
@@ -44,7 +44,7 @@ class SirenLayer(nn.Module):
 
 
 class PCSRModelSiren(nn.Module):
-    """SIREN model.
+    '''SIREN model.
     Args:
         dim_in (int): Dimension of input.
         dim_hidden (int): Dimension of hidden layers.
@@ -52,9 +52,9 @@ class PCSRModelSiren(nn.Module):
         num_layers (int): Number of layers.
         w0 (float): Omega 0 from SIREN paper.
         w0_initial (float): Omega 0 for first layer.
-        use_bias (bool):
+        use_bias (bool): Whether the bias is used
         final_activation (torch.nn.Module): Activation function.
-    """
+    '''
     def __init__(self, dim_in, dim_hidden, dim_out=8, num_layers=1, w0=30.,
                  w0_initial=30., use_bias=True, activation=None, final_activation=None):
         super().__init__()
@@ -74,7 +74,7 @@ class PCSRModelSiren(nn.Module):
         self.net = nn.Sequential(*layers)
         final_activation = nn.Sigmoid() if final_activation is None else final_activation
         self.last_layer = SirenLayer(dim_in=dim_hidden, dim_out=dim_out, w0=w0,
-                                use_bias=use_bias, activation=final_activation)
+                                     use_bias=use_bias, activation=final_activation)
 
     def forward(self, x):
         x = self.net(x)

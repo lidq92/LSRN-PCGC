@@ -7,10 +7,7 @@ log = None
 
 
 def create_logger(exp_folder, file_name, log_file_only=False):
-    if log_file_only:
-        handlers = []
-    else:
-        handlers = [logging.StreamHandler(sys.stdout)]
+    handlers = [] if log_file_only else [logging.StreamHandler(sys.stdout)]
     if file_name != '':
         log_path = os.path.join(exp_folder, file_name)
         os.makedirs(os.path.split(log_path)[0], exist_ok=True)

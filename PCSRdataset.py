@@ -2,7 +2,6 @@ import os
 import glob
 import torch
 import psutil
-import datetime
 import numpy as np
 import pandas as pd
 import multiprocessing
@@ -26,14 +25,14 @@ def process(arg):
         dist_points = np.unique(dist_points, axis=0) # remove duplicated points
     res_m = np.min(ori_points, axis=0).astype(int)
     dres_m = np.min(dist_points, axis=0).astype(int)
-    res = (np.max(ori_points, axis=0) - res_m + 3).astype(int)
-    dres = (np.max(dist_points, axis=0) - dres_m + 2*K + 1).astype(int) 
+    res = (np.max(ori_points, axis=0)-res_m+3).astype(int)
+    dres = (np.max(dist_points, axis=0)-dres_m+2*K+1).astype(int) 
     ori_voxels = np.zeros(res, dtype=np.int8)
     down_voxels = np.zeros(dres, dtype=np.int8)
     for i in range(len(ori_points)):
         ori_voxels[ori_points[i][0]+1-res_m[0], 
-                    ori_points[i][1]+1-res_m[1], 
-                    ori_points[i][2]+1-res_m[2]] = 1
+                   ori_points[i][1]+1-res_m[1], 
+                   ori_points[i][2]+1-res_m[2]] = 1
     for i in range(len(dist_points)):
         down_voxels[dist_points[i][0]+K-dres_m[0], 
                     dist_points[i][1]+K-dres_m[1], 
@@ -43,16 +42,16 @@ def process(arg):
     for i in range(len(dist_points)):
         [x, y, z] = [dist_points[i][j] for j in range(3)]
         tmp_neighs = down_voxels[x-dres_m[0]:x+2*K+1-dres_m[0],
-                                    y-dres_m[1]:y+2*K+1-dres_m[1],
-                                    z-dres_m[2]:z+2*K+1-dres_m[2]].reshape(-1)
-        neighs[i] = np.delete(tmp_neighs, (2*K+1)**3//2).reshape(-1) # remove center point which is always occupied
+                                 y-dres_m[1]:y+2*K+1-dres_m[1],
+                                 z-dres_m[2]:z+2*K+1-dres_m[2]].reshape(-1)
+        neighs[i] = np.delete(tmp_neighs, (2*K+1)**3//2).reshape(-1) # remove the occupied center
         childs[i] = ori_voxels[2*x-res_m[0]:2*x+2-res_m[0],
                                 2*y-res_m[1]:2*y+2-res_m[1],
                                 2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)
-    cloud = PyntCloud(pd.DataFrame(data=dist_points.astype(float), columns=["x", "y", "z"]))
+    cloud = PyntCloud(pd.DataFrame(data=dist_points.astype(float), columns=['x', 'y', 'z']))
     name = os.path.splitext(os.path.split(path)[1])[0]
-    if not os.path.exists("{}/{}_base.ply".format(output_path, name)):
-        cloud.to_file("{}/{}_base.ply".format(output_path, name), as_text=True)
+    if not os.path.exists('{}/{}_base.ply'.format(output_path, name)):
+        cloud.to_file('{}/{}_base.ply'.format(output_path, name), as_text=True)
     return neighs, childs
 
 
@@ -70,14 +69,12 @@ class PCSRDataset(Dataset):
         if args.dataset in ['basketball_player_vox11', 'dancer_vox11']:
             self.paths = self.paths[:64] # V-PCC CTC
         if not args.evaluate:
-            # nF = args.nF if len(self.paths) > args.nF else len(self.paths)
-            # self.paths = [self.paths[i] for i in range(0, len(self.paths), len(self.paths)//nF)]
-            step = args.frame_sampling_rate if len(self.paths) > args.frame_sampling_rate else len(self.paths)
-            self.paths = [self.paths[i] for i in range(0, len(self.paths), step)]
+            self.paths = [self.paths[i] for i in range(0, len(self.paths), args.frame_sampling_rate)]
         if self.status == 'train':
             self.neighs = [None] * len(self.paths)
             self.childs = [None] * len(self.paths)
             num_cores = psutil.cpu_count(logical=False)
+            if num_cores>len(self.paths): num_cores = len(self.paths)
             zip_args = list(zip(self.paths, 
                                 [self.pqs]*len(self.paths),
                                 [self.K]*len(self.paths),
@@ -105,17 +102,17 @@ class PCSRDataset(Dataset):
             ori_pc = PyntCloud.from_file(self.paths[idx])
             ori_points = ori_pc.points.values[:,:3].astype(int)
             if self.pqs > 2:
-                ori_points = np.round(ori_points/(self.pqs/2)+1e-6).astype(int) # downsample 
-                ori_points = np.unique(ori_points, axis=0) # remove duplicated points
-                dist_points = np.round(ori_points/2+1e-6).astype(int) # downsample 2
-                dist_points = np.unique(dist_points, axis=0) # remove duplicated points
+                ori_points = np.round(ori_points/(self.pqs/2)+1e-6).astype(int)
+                ori_points = np.unique(ori_points, axis=0) 
+                dist_points = np.round(ori_points/2+1e-6).astype(int) 
+                dist_points = np.unique(dist_points, axis=0)
             else: # self.pqs <= 2
-                dist_points = np.round(ori_points/self.pqs+1e-6).astype(int) # downsample <=2
-                dist_points = np.unique(dist_points, axis=0) # remove duplicated points
+                dist_points = np.round(ori_points/self.pqs+1e-6).astype(int) 
+                dist_points = np.unique(dist_points, axis=0)
             res_m = np.min(ori_points, axis=0).astype(int)
             dres_m = np.min(dist_points, axis=0).astype(int)
-            res = (np.max(ori_points, axis=0) - res_m + 3).astype(int)
-            dres = (np.max(dist_points, axis=0) - dres_m + 2*self.K + 1).astype(int) 
+            res = (np.max(ori_points, axis=0)-res_m+3).astype(int)
+            dres = (np.max(dist_points, axis=0)-dres_m+2*self.K+1).astype(int) 
             ori_voxels = np.zeros(res, dtype=np.int8)
             down_voxels = np.zeros(dres, dtype=np.int8)
             for i in range(len(ori_points)):
@@ -133,14 +130,14 @@ class PCSRDataset(Dataset):
                 tmp_neighs = down_voxels[x-dres_m[0]:x+2*self.K+1-dres_m[0],
                                          y-dres_m[1]:y+2*self.K+1-dres_m[1],
                                          z-dres_m[2]:z+2*self.K+1-dres_m[2]].reshape(-1)
-                neighs[i] = np.delete(tmp_neighs, (2*self.K+1)**3//2).reshape(-1) # remove center point which is always occupied
+                neighs[i] = np.delete(tmp_neighs, (2*self.K+1)**3//2).reshape(-1) 
                 childs[i] = ori_voxels[2*x-res_m[0]:2*x+2-res_m[0],
                                        2*y-res_m[1]:2*y+2-res_m[1],
                                        2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)
-            cloud = PyntCloud(pd.DataFrame(data=dist_points.astype(float), columns=["x", "y", "z"]))
+            cloud = PyntCloud(pd.DataFrame(data=dist_points.astype(float), columns=['x', 'y', 'z']))
             name = os.path.splitext(os.path.split(self.paths[idx])[1])[0]
-            if not os.path.exists("{}/{}_base.ply".format(self.output_path, name)):
-                cloud.to_file("{}/{}_base.ply".format(self.output_path, name), as_text=True)
+            if not os.path.exists('{}/{}_base.ply'.format(self.output_path, name)):
+                cloud.to_file('{}/{}_base.ply'.format(self.output_path, name), as_text=True)
             return neighs.astype(np.float32), (childs.astype(np.float32), dist_points, name)
     
 
@@ -158,10 +155,7 @@ class PCSRfDataset(Dataset):
         if args.dataset in ['basketball_player_vox11', 'dancer_vox11']:
             self.paths = self.paths[:64] # V-PCC CTC
         if not args.evaluate:
-            # nF = args.nF if len(self.paths) > args.nF else len(self.paths)
-            # self.paths = [self.paths[i] for i in range(0, len(self.paths), len(self.paths)//nF)]
-            step = args.frame_sampling_rate if len(self.paths) > args.frame_sampling_rate else len(self.paths)
-            self.paths = [self.paths[i] for i in range(0, len(self.paths), step)]
+            self.paths = [self.paths[i] for i in range(0, len(self.paths), args.frame_sampling_rate)]
 
     def __len__(self):
         return len(self.paths)
@@ -170,17 +164,17 @@ class PCSRfDataset(Dataset):
         ori_pc = PyntCloud.from_file(self.paths[idx])
         ori_points = ori_pc.points.values[:,:3].astype(int)
         if self.nscale:
-            ori_points = np.round(ori_points/2**self.nscale+1e-6).astype(int) # downsample 
-            ori_points = np.unique(ori_points, axis=0) # remove duplicated points
+            ori_points = np.round(ori_points/2**self.nscale+1e-6).astype(int) 
+            ori_points = np.unique(ori_points, axis=0)
         name = os.path.splitext(os.path.split(self.paths[idx])[1])[0]
-        path = "{}/{}_preinv_output_scale{}.ply".format(self.output_path, name, self.nscale+1)
+        path = '{}/{}_preinv_output_scale{}.ply'.format(self.output_path, name, self.nscale+1)
         dist_pc = PyntCloud.from_file(path)
-        # os.system('rm -r ' + "{}/{}_preinv_output_scale{}.ply".format(self.output_path, name, self.nscale+1)) #
+        # os.system('rm -r ' + '{}/{}_preinv_output_scale{}.ply'.format(self.output_path, name, self.nscale+1)) #
         dist_points = dist_pc.points.values[:,:3].astype(int)
         res_m = np.min(ori_points, axis=0).astype(int)
         dres_m = np.min(dist_points, axis=0).astype(int)
-        res = (np.max(ori_points, axis=0) - res_m + 3).astype(int)
-        dres = (np.max(dist_points, axis=0) - dres_m + 2*self.K + 1).astype(int) 
+        res = (np.max(ori_points, axis=0)-res_m+3).astype(int)
+        dres = (np.max(dist_points, axis=0)-dres_m+2*self.K+1).astype(int) 
         ori_voxels = np.zeros(res, dtype=np.int8)
         down_voxels = np.zeros(dres, dtype=np.int8)
         for i in range(len(ori_points)):
@@ -198,9 +192,9 @@ class PCSRfDataset(Dataset):
             tmp_neighs = down_voxels[x-dres_m[0]:x+2*self.K+1-dres_m[0],
                                      y-dres_m[1]:y+2*self.K+1-dres_m[1],
                                      z-dres_m[2]:z+2*self.K+1-dres_m[2]].reshape(-1)
-            neighs[i] = np.delete(tmp_neighs, (2*self.K+1)**3//2).reshape(-1) # remove center point which is always occupied
+            neighs[i] = np.delete(tmp_neighs, (2*self.K+1)**3//2).reshape(-1) 
             tmp_childs = ori_voxels[2*x-res_m[0]:2*x+2-res_m[0],
                                     2*y-res_m[1]:2*y+2-res_m[1],
                                     2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)
-            if len(tmp_childs)==8: childs[i] = tmp_childs # 0, 2, 4...
+            if len(tmp_childs)==8: childs[i] = tmp_childs # 0, 2, 4 cases -> all zeros ...
         return neighs.astype(np.float32), (childs.astype(np.float32), dist_points, name)

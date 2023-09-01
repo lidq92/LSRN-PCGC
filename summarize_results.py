@@ -1,11 +1,34 @@
 import xlwt
+from argparse import ArgumentParser
 
 
-logpath = 'logs_eval' # 
-# format_str = '/Siren_bc16_K2_lr0.001_nF10_bs2048_e150_{}_pqs{}'
-format_str = '/Siren_bc16_nl1_K2_lr0.001_nF10_bs2048_e150_{}_pqs{}'
-excel_file = 'LSRN-PCGC.xls'
-
+parser = ArgumentParser(description='LSRN-PCGC summarize results')
+parser.add_argument('-model', '--model', default='LSRN', type=str,
+                    help='LSRN')
+parser.add_argument('-act', '--activation', default='Sine', type=str,
+                    help='Sine')
+parser.add_argument('-bc', '--base_channel', type=int, default=16,
+                    help='base channel (default: 16)')
+parser.add_argument('-nl', '--num_layers', type=int, default=1,
+                    help='Number of layers (default: 1)')
+parser.add_argument('-K', '--K', type=int, default=2,
+                    help='neighbors (2K+1)^3-1')
+parser.add_argument('-precision', '--precision', type=int, default=16,
+                    help=' (default: 16)')
+parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=3,
+                    help='#frame sampling rate (default: 3)')
+parser.add_argument('-lr', '--lr', type=float, default=1e-3,
+                    help='learning rate (default: 1e-3)')
+parser.add_argument('-bs', '--batch_size', type=int, default=2048,
+                    help='batch size (default: 2048)')
+parser.add_argument('-e', '--epochs', type=int, default=150,
+                    help='number of epochs to train (default: 150)')
+args = parser.parse_args()
+logpath = 'logs_eval/' # eval
+fs_base = '{}_act{}_bc{}_nl{}_K{}_lr{}_fps{}_bs{}_e{}'
+format_str  = fs_base.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
+                        args.lr, args.frame_sampling_rate, args.batch_size, args.epochs)
+excel_file = '{}.xls'.format(format_str)
 datasetname_lst = list([
 	'loot',
 	'redandblack',
@@ -15,7 +38,6 @@ datasetname_lst = list([
 	'basketball_player_vox11',
 	'dancer_vox11',
 ])
-
 pqs_lst = list([
 	64,
 	32,
@@ -24,25 +46,19 @@ pqs_lst = list([
 	4,
 	2,
 ])
-
-pqs = {}
-
 wbk = xlwt.Workbook()
 sheet = wbk.add_sheet('C2 lossyG,lossyA,intra', cell_overwrite_ok=True)        
-output = open('result.txt', 'w')
-
+output = open('{}.txt'.format(format_str), 'w')
 file_lst = list()
 for name in datasetname_lst:
     for pqs in pqs_lst:
-        file_lst.append(logpath + format_str.format(name, pqs))
-
+        file_lst.append(logpath+format_str+'_{}_pqs{}'.format(name, pqs))
 row = 0
 col = 0
 missed = 0
 for k, file_name in enumerate(file_lst):
     print(file_name)
     record = list()
-    
     netparam = 0
     base = 0
     points = 0
@@ -64,7 +80,6 @@ for k, file_name in enumerate(file_lst):
                 D2 += float(words[2])
             if (('positions' in words) and ('bitstream' in words)) :
                 base += int(words[3]) * 8
-
         reader.close()
         D1 = D1 / nF
         D2 = D2 / nF
@@ -90,21 +105,18 @@ for k, file_name in enumerate(file_lst):
             sheet.write(row, col+7, D1)
         if D2 != 0:
             record.append(str(D2)) 
-            sheet.write(row, col+8, D2)
-            
+            sheet.write(row, col+8, D2)            
         record_str = ''
         row = row + 1
     else:
         missed += 1
         record_str = ''
-    if (k+1)%5==0:
+    if (k+1)%6==0: # 6 rate points / pc
         row = row + missed
         missed = 0
-
     for word in record:
         record_str = record_str + str(word) + ' '
     record_str = record_str + '\n'
     output.write(record_str)
-
 output.close()
 wbk.save(excel_file)
