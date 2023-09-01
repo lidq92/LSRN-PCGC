@@ -201,7 +201,7 @@ if __name__ == '__main__':
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-    fs = '{}_act{}_bc{}_nl{}_K{}_lr{}_fps{}_bs{}_e{}_{}_pqs{}'
+    fs = '{}_{}_bc{}_nl{}_K{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
     args.f_str = fs.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
                            args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
                            args.dataset, args.pqs)
