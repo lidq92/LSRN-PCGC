@@ -201,9 +201,9 @@ if __name__ == '__main__':
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-    fs = '{}_{}_bc{}_nl{}_K{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
+    fs = '{}_{}_bc{}_nl{}_K{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
     args.f_str = fs.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
-                           args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
+                           args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
                            args.dataset, args.pqs)
     if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
     args.trained_model_file = 'checkpoints/' + args.f_str

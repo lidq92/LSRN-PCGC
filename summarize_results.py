@@ -25,9 +25,9 @@ parser.add_argument('-e', '--epochs', type=int, default=150,
                     help='number of epochs to train (default: 150)')
 args = parser.parse_args()
 logpath = 'logs_eval/' # eval
-fs_base = '{}_{}_bc{}_nl{}_K{}_lr{}_fsr{}_bs{}_e{}'
+fs_base = '{}_{}_bc{}_nl{}_K{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
 format_str  = fs_base.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
-                        args.lr, args.frame_sampling_rate, args.batch_size, args.epochs)
+                             args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs)
 excel_file = '{}.xls'.format(format_str)
 datasetname_lst = list([
 	'loot',
