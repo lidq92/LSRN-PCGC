@@ -60,7 +60,6 @@ def train(args):
         performance = evaluator.state.metrics
         for metric in metrics_printed:
             logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric, performance[metric].item()))
-        np.save(args.save_result_file, performance)
         if nscale:
             dataset = PCSRfDataset(args, nscale-1)
             loader = DataLoader(dataset)
@@ -69,7 +68,6 @@ def train(args):
             performance = evaluator.state.metrics
             for metric in metrics_printed:
                 logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric, performance[metric].item()))
-            np.save(args.save_result_file, performance)
         list_basefile = glob.glob('{}/*base.ply'.format(os.path.abspath(args.output_path)))
         list_basefile.sort()
         for base_pc in list_basefile:
@@ -201,14 +199,12 @@ if __name__ == '__main__':
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-    fs = '{}_act{}_bc{}_nl{}_K{}_lr{}_fps{}_bs{}_e{}_{}_pqs{}'
+    fs = '{}_{}_bc{}_nl{}_K{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
     args.f_str = fs.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
-                           args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
+                           args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
                            args.dataset, args.pqs)
     if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
     args.trained_model_file = 'checkpoints/' + args.f_str
-    if not os.path.exists('results'): os.makedirs('results')
-    args.save_result_file = 'results/' + args.f_str
     args.output_path = 'outputs/' + args.f_str
     if not os.path.exists(args.output_path): os.makedirs(args.output_path)
     if args.evaluate:
