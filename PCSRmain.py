@@ -167,8 +167,8 @@ if __name__ == '__main__':
                         help='neighbors (2D+1)^3-1')
     parser.add_argument('-prec', '--precision', type=int, default=16,
                         help=' (default: 16)')
-    parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=3,
-                        help='#frame sampling rate (default: 3)')
+    parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=10,
+                        help='#frame sampling rate (default: 10)')
     parser.add_argument('-eval', '--evaluate', action='store_true',
                         help='Evaluate only?')
     parser.add_argument('-lr', '--lr', type=float, default=1e-3,
