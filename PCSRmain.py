@@ -28,7 +28,7 @@ def writer_add_scalar(writer, status, dataset, scalars, iter):
 def train(args):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     activation = torch.nn.ReLU() if args.activation == 'ReLU' else None # None -> default Sine
-    model = PCSRModelSiren(dim_in=(2*args.K+1)**3-1, 
+    model = PCSRModelSiren(dim_in=(2*args.D+1)**3-1, 
                            dim_hidden=args.base_channel, 
                            num_layers=args.num_layers,
                            activation=activation)
@@ -159,13 +159,13 @@ if __name__ == '__main__':
                         help='LSRN')
     parser.add_argument('-act', '--activation', default='Sine', type=str,
                         help='Sine')
-    parser.add_argument('-bc', '--base_channel', type=int, default=16,
-                        help='base channel (default: 16)')
+    parser.add_argument('-bc', '--base_channel', type=int, default=32,
+                        help='base channel (default: 32)')
     parser.add_argument('-nl', '--num_layers', type=int, default=1,
                         help='Number of layers (default: 1)')
-    parser.add_argument('-K', '--K', type=int, default=2,
-                        help='neighbors (2K+1)^3-1')
-    parser.add_argument('-precision', '--precision', type=int, default=16,
+    parser.add_argument('-D', '--D', type=int, default=2,
+                        help='neighbors (2D+1)^3-1')
+    parser.add_argument('-prec', '--precision', type=int, default=16,
                         help=' (default: 16)')
     parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=3,
                         help='#frame sampling rate (default: 3)')
@@ -199,8 +199,8 @@ if __name__ == '__main__':
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-    fs = '{}_{}_bc{}_nl{}_K{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
-    args.f_str = fs.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
+    fs = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
+    args.f_str = fs.format(args.model, args.activation, args.base_channel, args.num_layers, args.D, 
                            args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
                            args.dataset, args.pqs)
     if not os.path.exists('checkpoints'): os.makedirs('checkpoints')

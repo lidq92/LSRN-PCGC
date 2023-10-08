@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 def process(arg):
-    path, pqs, K, output_path, core_id = arg
+    path, pqs, D, output_path, core_id = arg
     p = psutil.Process()
     p.cpu_affinity([core_id])
     ori_pc = PyntCloud.from_file(path)
@@ -26,7 +26,7 @@ def process(arg):
     res_m = np.min(ori_points, axis=0).astype(int)
     dres_m = np.min(dist_points, axis=0).astype(int)
     res = (np.max(ori_points, axis=0)-res_m+3).astype(int)
-    dres = (np.max(dist_points, axis=0)-dres_m+2*K+1).astype(int) 
+    dres = (np.max(dist_points, axis=0)-dres_m+2*D+1).astype(int) 
     ori_voxels = np.zeros(res, dtype=np.int8)
     down_voxels = np.zeros(dres, dtype=np.int8)
     for i in range(len(ori_points)):
@@ -34,17 +34,17 @@ def process(arg):
                    ori_points[i][1]+1-res_m[1], 
                    ori_points[i][2]+1-res_m[2]] = 1
     for i in range(len(dist_points)):
-        down_voxels[dist_points[i][0]+K-dres_m[0], 
-                    dist_points[i][1]+K-dres_m[1], 
-                    dist_points[i][2]+K-dres_m[2]] = 1 
-    neighs = np.zeros((len(dist_points), (2*K+1)**3-1))
+        down_voxels[dist_points[i][0]+D-dres_m[0], 
+                    dist_points[i][1]+D-dres_m[1], 
+                    dist_points[i][2]+D-dres_m[2]] = 1 
+    neighs = np.zeros((len(dist_points), (2*D+1)**3-1))
     childs = np.zeros((len(dist_points), 8))
     for i in range(len(dist_points)):
         [x, y, z] = [dist_points[i][j] for j in range(3)]
-        tmp_neighs = down_voxels[x-dres_m[0]:x+2*K+1-dres_m[0],
-                                 y-dres_m[1]:y+2*K+1-dres_m[1],
-                                 z-dres_m[2]:z+2*K+1-dres_m[2]].reshape(-1)
-        neighs[i] = np.delete(tmp_neighs, (2*K+1)**3//2).reshape(-1) # remove the occupied center
+        tmp_neighs = down_voxels[x-dres_m[0]:x+2*D+1-dres_m[0],
+                                 y-dres_m[1]:y+2*D+1-dres_m[1],
+                                 z-dres_m[2]:z+2*D+1-dres_m[2]].reshape(-1)
+        neighs[i] = np.delete(tmp_neighs, (2*D+1)**3//2).reshape(-1) # remove the occupied center
         childs[i] = ori_voxels[2*x-res_m[0]:2*x+2-res_m[0],
                                 2*y-res_m[1]:2*y+2-res_m[1],
                                 2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)
@@ -57,7 +57,7 @@ def process(arg):
 
 class PCSRDataset(Dataset):
     def __init__(self, args, status='train'):
-        self.K = args.K
+        self.D = args.D
         self.pqs = args.pqs # 
         self.status = status
         self.output_path = args.output_path
@@ -77,7 +77,7 @@ class PCSRDataset(Dataset):
             if num_cores>len(self.paths): num_cores = len(self.paths)
             zip_args = list(zip(self.paths, 
                                 [self.pqs]*len(self.paths),
-                                [self.K]*len(self.paths),
+                                [self.D]*len(self.paths),
                                 [self.output_path]*len(self.paths),
                                 range(num_cores)
                                 ))
@@ -112,7 +112,7 @@ class PCSRDataset(Dataset):
             res_m = np.min(ori_points, axis=0).astype(int)
             dres_m = np.min(dist_points, axis=0).astype(int)
             res = (np.max(ori_points, axis=0)-res_m+3).astype(int)
-            dres = (np.max(dist_points, axis=0)-dres_m+2*self.K+1).astype(int) 
+            dres = (np.max(dist_points, axis=0)-dres_m+2*self.D+1).astype(int) 
             ori_voxels = np.zeros(res, dtype=np.int8)
             down_voxels = np.zeros(dres, dtype=np.int8)
             for i in range(len(ori_points)):
@@ -120,17 +120,17 @@ class PCSRDataset(Dataset):
                            ori_points[i][1]+1-res_m[1], 
                            ori_points[i][2]+1-res_m[2]] = 1
             for i in range(len(dist_points)):
-                down_voxels[dist_points[i][0]+self.K-dres_m[0], 
-                            dist_points[i][1]+self.K-dres_m[1], 
-                            dist_points[i][2]+self.K-dres_m[2]] = 1 
-            neighs = np.zeros((len(dist_points), (2*self.K+1)**3-1))
+                down_voxels[dist_points[i][0]+self.D-dres_m[0], 
+                            dist_points[i][1]+self.D-dres_m[1], 
+                            dist_points[i][2]+self.D-dres_m[2]] = 1 
+            neighs = np.zeros((len(dist_points), (2*self.D+1)**3-1))
             childs = np.zeros((len(dist_points), 8))
             for i in range(len(dist_points)):
                 [x, y, z] = [dist_points[i][j] for j in range(3)]
-                tmp_neighs = down_voxels[x-dres_m[0]:x+2*self.K+1-dres_m[0],
-                                         y-dres_m[1]:y+2*self.K+1-dres_m[1],
-                                         z-dres_m[2]:z+2*self.K+1-dres_m[2]].reshape(-1)
-                neighs[i] = np.delete(tmp_neighs, (2*self.K+1)**3//2).reshape(-1) 
+                tmp_neighs = down_voxels[x-dres_m[0]:x+2*self.D+1-dres_m[0],
+                                         y-dres_m[1]:y+2*self.D+1-dres_m[1],
+                                         z-dres_m[2]:z+2*self.D+1-dres_m[2]].reshape(-1)
+                neighs[i] = np.delete(tmp_neighs, (2*self.D+1)**3//2).reshape(-1) 
                 childs[i] = ori_voxels[2*x-res_m[0]:2*x+2-res_m[0],
                                        2*y-res_m[1]:2*y+2-res_m[1],
                                        2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)
@@ -143,7 +143,7 @@ class PCSRDataset(Dataset):
 
 class PCSRfDataset(Dataset):
     def __init__(self, args, nscale):
-        self.K = args.K
+        self.D = args.D
         self.pqs = args.pqs
         self.nscale = nscale
         self.output_path = args.output_path
@@ -174,7 +174,7 @@ class PCSRfDataset(Dataset):
         res_m = np.min(ori_points, axis=0).astype(int)
         dres_m = np.min(dist_points, axis=0).astype(int)
         res = (np.max(ori_points, axis=0)-res_m+3).astype(int)
-        dres = (np.max(dist_points, axis=0)-dres_m+2*self.K+1).astype(int) 
+        dres = (np.max(dist_points, axis=0)-dres_m+2*self.D+1).astype(int) 
         ori_voxels = np.zeros(res, dtype=np.int8)
         down_voxels = np.zeros(dres, dtype=np.int8)
         for i in range(len(ori_points)):
@@ -182,17 +182,17 @@ class PCSRfDataset(Dataset):
                        ori_points[i][1]+1-res_m[1], 
                        ori_points[i][2]+1-res_m[2]] = 1
         for i in range(len(dist_points)):
-            down_voxels[dist_points[i][0]+self.K-dres_m[0], 
-                        dist_points[i][1]+self.K-dres_m[1], 
-                        dist_points[i][2]+self.K-dres_m[2]] = 1 
-        neighs = np.zeros((len(dist_points), (2*self.K+1)**3-1))
+            down_voxels[dist_points[i][0]+self.D-dres_m[0], 
+                        dist_points[i][1]+self.D-dres_m[1], 
+                        dist_points[i][2]+self.D-dres_m[2]] = 1 
+        neighs = np.zeros((len(dist_points), (2*self.D+1)**3-1))
         childs = np.zeros((len(dist_points), 8))
         for i in range(len(dist_points)):
             [x, y, z] = [dist_points[i][j] for j in range(3)]
-            tmp_neighs = down_voxels[x-dres_m[0]:x+2*self.K+1-dres_m[0],
-                                     y-dres_m[1]:y+2*self.K+1-dres_m[1],
-                                     z-dres_m[2]:z+2*self.K+1-dres_m[2]].reshape(-1)
-            neighs[i] = np.delete(tmp_neighs, (2*self.K+1)**3//2).reshape(-1) 
+            tmp_neighs = down_voxels[x-dres_m[0]:x+2*self.D+1-dres_m[0],
+                                     y-dres_m[1]:y+2*self.D+1-dres_m[1],
+                                     z-dres_m[2]:z+2*self.D+1-dres_m[2]].reshape(-1)
+            neighs[i] = np.delete(tmp_neighs, (2*self.D+1)**3//2).reshape(-1) 
             tmp_childs = ori_voxels[2*x-res_m[0]:2*x+2-res_m[0],
                                     2*y-res_m[1]:2*y+2-res_m[1],
                                     2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)

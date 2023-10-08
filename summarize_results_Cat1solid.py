@@ -7,12 +7,10 @@ parser.add_argument('-model', '--model', default='LSRN', type=str,
                     help='LSRN')
 parser.add_argument('-act', '--activation', default='Sine', type=str,
                     help='Sine')
-parser.add_argument('-bc', '--base_channel', type=int, default=16,
-                    help='base channel (default: 16)')
 parser.add_argument('-nl', '--num_layers', type=int, default=1,
                     help='Number of layers (default: 1)')
-parser.add_argument('-K', '--K', type=int, default=2,
-                    help='neighbors (2K+1)^3-1')
+parser.add_argument('-D', '--D', type=int, default=2,
+                    help='neighbors (2D+1)^3-1')
 parser.add_argument('-precision', '--precision', type=int, default=16,
                     help=' (default: 16)')
 parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=1,
@@ -25,18 +23,14 @@ parser.add_argument('-e', '--epochs', type=int, default=150,
                     help='number of epochs to train (default: 150)')
 args = parser.parse_args()
 logpath = 'logs_eval/' # eval
-fs_base = '{}_{}_bc{}_nl{}_K{}_p{}_lr{}_fsr{}_bs{}_e{}'
-format_str  = fs_base.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
-                        args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs)
-excel_file = '{}.xls'.format(format_str)
 datasetname_lst = list([
     'basketball_player_vox11_00000200.ply',
     'dancer_vox11_00000001.ply',
     'Facade_00064_vox11.ply',
     'longdress_vox10_1300_n.ply',
     'loot_vox10_1200_n.ply',
-    'queen_frame_0200_n.ply',
-    'redandblack_vox10_1550.ply',
+    'queen_0200_n.ply',
+    'redandblack_vox10_1550_n.ply',
     'soldier_vox10_0690_n.ply',
     'Thaidancer_viewdep_vox12.ply',
 ])
@@ -50,11 +44,16 @@ pqs_lst = list([
 ])
 wbk = xlwt.Workbook()
 sheet = wbk.add_sheet('C2 lossyG,lossyA,intra', cell_overwrite_ok=True)        
-output = open('{}.txt'.format(format_str), 'w')
+output = open('Cat1solid.txt', 'w')
 file_lst = list()
 for name in datasetname_lst:
     for pqs in pqs_lst:
-        file_lst.append(logpath+format_str+'_{}_pqs{}'.format(name, pqs))
+        fs_base = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
+        file = logpath+fs_base.format(args.model, args.activation, int(64/pqs), 
+                                      args.num_layers, args.D, args.precision, 
+                                      args.lr, args.frame_sampling_rate, args.batch_size,
+                                      args.epochs, name, pqs)
+        file_lst.append(file)
 row = 0
 col = 0
 missed = 0
@@ -100,9 +99,8 @@ for k, file_name in enumerate(file_lst):
             sheet.write(row, col+1, total)
         if geom != 0:
             record.append(str(base))
-            sheet.write(row, col+2, base)
             record.append(str(netparam)) 
-            sheet.write(row, col+3, netparam)
+            sheet.write(row, col+2, geom)
         if D1 != 0:
             record.append(str(D1)) 
             sheet.write(row, col+5, D1)
@@ -122,4 +120,6 @@ for k, file_name in enumerate(file_lst):
     record_str = record_str + '\n'
     output.write(record_str)
 output.close()
+
+excel_file = 'Cat1solid.xls' #
 wbk.save(excel_file)

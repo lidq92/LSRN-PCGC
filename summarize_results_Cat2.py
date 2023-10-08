@@ -11,8 +11,8 @@ parser.add_argument('-bc', '--base_channel', type=int, default=16,
                     help='base channel (default: 16)')
 parser.add_argument('-nl', '--num_layers', type=int, default=1,
                     help='Number of layers (default: 1)')
-parser.add_argument('-K', '--K', type=int, default=2,
-                    help='neighbors (2K+1)^3-1')
+parser.add_argument('-D', '--D', type=int, default=2,
+                    help='neighbors (2D+1)^3-1')
 parser.add_argument('-precision', '--precision', type=int, default=16,
                     help=' (default: 16)')
 parser.add_argument('-fsr', '--frame_sampling_rate', type=int, default=10,
@@ -25,8 +25,8 @@ parser.add_argument('-e', '--epochs', type=int, default=150,
                     help='number of epochs to train (default: 150)')
 args = parser.parse_args()
 logpath = 'logs_eval/' # eval
-fs_base = '{}_{}_bc{}_nl{}_K{}_p{}_lr{}_fsr{}_bs{}_e{}'
-format_str  = fs_base.format(args.model, args.activation, args.base_channel, args.num_layers, args.K, 
+fs_base = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}'
+format_str  = fs_base.format(args.model, args.activation, args.base_channel, args.num_layers, args.D, 
                         args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs)
 excel_file = '{}.xls'.format(format_str)
 datasetname_lst = list([
