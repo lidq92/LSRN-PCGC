@@ -9,7 +9,7 @@ parser.add_argument('-act', '--activation', default='Sine', type=str,
                     help='Sine')
 parser.add_argument('-nl', '--num_layers', type=int, default=1,
                     help='Number of layers (default: 1)')
-parser.add_argument('-D', '--D', type=int, default=2,
+parser.add_argument('-D', '--D', type=int, default=1,
                     help='neighbors (2D+1)^3-1')
 parser.add_argument('-precision', '--precision', type=int, default=16,
                     help=' (default: 16)')
