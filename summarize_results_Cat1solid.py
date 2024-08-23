@@ -7,6 +7,8 @@ parser.add_argument('-model', '--model', default='LSRN', type=str,
                     help='LSRN')
 parser.add_argument('-act', '--activation', default='Sine', type=str,
                     help='Sine')
+parser.add_argument('-ppqs', '--ppqs', type=float, default=1,
+                        help='pre pqs (default: 1), not excute pre pqs')
 parser.add_argument('-nl', '--num_layers', type=int, default=1,
                     help='Number of layers (default: 1)')
 parser.add_argument('-D', '--D', type=int, default=1,
@@ -22,7 +24,8 @@ parser.add_argument('-bs', '--batch_size', type=int, default=2048,
 parser.add_argument('-e', '--epochs', type=int, default=150,
                     help='number of epochs to train (default: 150)')
 args = parser.parse_args()
-logpath = 'logs_eval/' # eval
+# logpath = 'logs_eval/' # eval
+logpath = 'logs/'
 datasetname_lst = list([
     'basketball_player_vox11_00000200.ply',
     'dancer_vox11_00000001.ply',
@@ -35,24 +38,27 @@ datasetname_lst = list([
     'Thaidancer_viewdep_vox12.ply',
 ])
 pqs_lst = list([
-	64,
-	32,
-	16,
-	8,
-	4,
-	2,
+    64,
+    32,
+    16,
+    8,
+    4,
+    2,
 ])
 wbk = xlwt.Workbook()
 sheet = wbk.add_sheet('C2 lossyG,lossyA,intra', cell_overwrite_ok=True)        
-output = open('Cat1solid.txt', 'w')
+output = open(f'Cat1solid_ppqs{args.ppqs}.txt', 'w')
 file_lst = list()
 for name in datasetname_lst:
     for pqs in pqs_lst:
-        fs_base = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
-        file = logpath+fs_base.format(args.model, args.activation, int(64/pqs), 
-                                      args.num_layers, args.D, args.precision, 
-                                      args.lr, args.frame_sampling_rate, args.batch_size,
-                                      args.epochs, name, pqs)
+        # fs_base = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
+        # file = logpath+fs_base.format(args.model, args.activation, int(64/pqs), 
+        #                               args.num_layers, args.D, args.precision, 
+        #                               args.lr, args.frame_sampling_rate, args.batch_size,
+        #                               args.epochs, name, pqs)
+        fs_base = 'decompress_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_ppqs{}_pqs{}.log'
+        file = logpath+fs_base.format(name, int(64/pqs), args.num_layers, args.D, args.precision, 
+                                args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, args.activation, args.ppqs, pqs)
         file_lst.append(file)
 row = 0
 col = 0
@@ -86,9 +92,9 @@ for k, file_name in enumerate(file_lst):
         D2 = D2 / nF
     except IOError:
         print('No files found!')
-    base = int(base / 2) # encoder+decoder
-    geom = base + netparam  
-    total = geom
+    # base = int(base / 2) # encoder+decoder
+    geom = base 
+    total = geom + netparam  
     print(points, geom, base, netparam, D1, D2)
     if base != 0:
         if points != 0:
@@ -98,9 +104,10 @@ for k, file_name in enumerate(file_lst):
             record.append(str(total))
             sheet.write(row, col+1, total)
         if geom != 0:
-            record.append(str(base))
+            record.append(str(geom))
             record.append(str(netparam)) 
             sheet.write(row, col+2, geom)
+            sheet.write(row, col+3, netparam)
         if D1 != 0:
             record.append(str(D1)) 
             sheet.write(row, col+5, D1)
@@ -121,5 +128,5 @@ for k, file_name in enumerate(file_lst):
     output.write(record_str)
 output.close()
 
-excel_file = 'Cat1solid.xls' #
+excel_file = f'Cat1solid_ppqs{args.ppqs}.xls' #
 wbk.save(excel_file)

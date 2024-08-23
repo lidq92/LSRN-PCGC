@@ -10,11 +10,14 @@ from torch.utils.data import Dataset
 
 
 def process(arg):
-    path, pqs, D, output_path, core_id = arg
+    path, ppqs, pqs, D, output_path, core_id = arg
     p = psutil.Process()
     p.cpu_affinity([core_id])
     ori_pc = PyntCloud.from_file(path)
     ori_points = ori_pc.points.values[:,:3].astype(int)
+    if ppqs > 1.0:
+        ori_points = np.round(ori_points/ppqs+1e-6).astype(int)
+        ori_points = np.unique(ori_points, axis=0)     
     if pqs > 2:
         ori_points = np.round(ori_points/(pqs/2)+1e-6).astype(int) # downsample 
         ori_points = np.unique(ori_points, axis=0) # remove duplicated points
@@ -58,13 +61,16 @@ def process(arg):
 class PCSRDataset(Dataset):
     def __init__(self, args, status='train'):
         self.D = args.D
+        self.ppqs = args.ppqs # pre pqs
         self.pqs = args.pqs # 
         self.status = status
         self.output_path = args.output_path
         if '.ply' in args.dataset: # static pc
-            self.paths = ['data/{}'.format(args.dataset)]
+            # self.paths = ['data/{}'.format(args.dataset)]
+            self.paths = ['{}'.format(args.pointcloud)]
         else: # dynamic pc
-            self.paths = glob.glob('data/{}/*.ply'.format(args.dataset))
+            # self.paths = glob.glob('data/{}/*.ply'.format(args.dataset))
+            self.paths = glob.glob('{}/*.ply'.format(args.pointcloud))
             self.paths.sort()
         if args.dataset in ['basketball_player_vox11', 'dancer_vox11']:
             self.paths = self.paths[:64] # V-PCC CTC
@@ -76,6 +82,7 @@ class PCSRDataset(Dataset):
             num_cores = psutil.cpu_count(logical=False)
             if num_cores>len(self.paths): num_cores = len(self.paths)
             zip_args = list(zip(self.paths, 
+                                [self.ppqs]*len(self.paths),
                                 [self.pqs]*len(self.paths),
                                 [self.D]*len(self.paths),
                                 [self.output_path]*len(self.paths),
@@ -101,6 +108,9 @@ class PCSRDataset(Dataset):
         else:
             ori_pc = PyntCloud.from_file(self.paths[idx])
             ori_points = ori_pc.points.values[:,:3].astype(int)
+            if self.ppqs > 1.0:
+                ori_points = np.round(ori_points/self.ppqs+1e-6).astype(int)
+                ori_points = np.unique(ori_points, axis=0) 
             if self.pqs > 2:
                 ori_points = np.round(ori_points/(self.pqs/2)+1e-6).astype(int)
                 ori_points = np.unique(ori_points, axis=0) 
@@ -148,9 +158,11 @@ class PCSRfDataset(Dataset):
         self.nscale = nscale
         self.output_path = args.output_path
         if '.ply' in args.dataset: # static pc
-            self.paths = ['data/{}'.format(args.dataset)]
+            # self.paths = ['data/{}'.format(args.dataset)]
+            self.paths = ['{}'.format(args.pointcloud)]
         else: # dynamic pc
-            self.paths = glob.glob('data/{}/*.ply'.format(args.dataset))
+            # self.paths = glob.glob('data/{}/*.ply'.format(args.dataset))
+            self.paths = glob.glob('{}/*.ply'.format(args.pointcloud))
             self.paths.sort()
         if args.dataset in ['basketball_player_vox11', 'dancer_vox11']:
             self.paths = self.paths[:64] # V-PCC CTC
@@ -198,3 +210,22 @@ class PCSRfDataset(Dataset):
                                     2*z-res_m[2]:2*z+2-res_m[2]].reshape(-1)
             if len(tmp_childs)==8: childs[i] = tmp_childs # 0, 2, 4 cases -> all zeros ...
         return neighs.astype(np.float32), (childs.astype(np.float32), dist_points, name)
+
+
+def process2neighs(base_points, D):
+    dres_m = np.min(base_points, axis=0).astype(int)
+    dres = (np.max(base_points, axis=0)-dres_m+2*D+1).astype(int) 
+    down_voxels = np.zeros(dres, dtype=np.int8)
+    for i in range(len(base_points)):
+        down_voxels[base_points[i][0]+D-dres_m[0], 
+                    base_points[i][1]+D-dres_m[1], 
+                    base_points[i][2]+D-dres_m[2]] = 1 
+    neighs = np.zeros((len(base_points), (2*D+1)**3-1))
+    for i in range(len(base_points)):
+        [x, y, z] = [base_points[i][j] for j in range(3)]
+        tmp_neighs = down_voxels[x-dres_m[0]:x+2*D+1-dres_m[0],
+                                    y-dres_m[1]:y+2*D+1-dres_m[1],
+                                    z-dres_m[2]:z+2*D+1-dres_m[2]].reshape(-1)
+        neighs[i] = np.delete(tmp_neighs, (2*D+1)**3//2).reshape(-1) 
+
+    return neighs.astype(np.float32)

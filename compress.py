@@ -14,9 +14,10 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam, lr_scheduler
 from torch.utils.tensorboard import SummaryWriter
 from PCSRmodel import PCSRModelSiren
-from PCSRdataset import PCSRDataset, PCSRfDataset
-from PCSRperformance import PCSRPerformance, PCSRPerformance1
-from modified_ignite_engine import create_supervised_evaluator, create_supervised_validator, create_supervised_trainer
+from PCSRdataset import PCSRDataset
+from PCSRperformance import PCSRPerformance
+from modified_ignite_engine import create_supervised_validator, create_supervised_trainer
+from bitstream import *
 
 
 metrics_printed = ['mAcc']
@@ -41,55 +42,12 @@ def train(args):
 
     nscale = np.ceil(np.log2(args.pqs/2)).astype(int) # nscale
     
-    if args.evaluate:    
-        test_dataset = PCSRDataset(args, status='test')
-        test_loader = DataLoader(test_dataset, num_workers=32, pin_memory=True)    
-        logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
-        with open(args.trained_model_file+'_cbytes.bin','rb') as f: compressed_bytes = f.read()
-        params = fpzip.decompress(compressed_bytes, order='C')[0][0][0]
-        k = 0
-        state_dict = {}
-        for param_tensor in model.state_dict():
-            values = params[k:k+model.state_dict()[param_tensor].numel()].reshape(model.state_dict()[param_tensor].size())
-            state_dict[param_tensor] = torch.from_numpy(values)
-            k = k + model.state_dict()[param_tensor].numel()
-        model.load_state_dict(state_dict)
-        computePSNR = False if nscale else True #
-        evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args, nscale, computePSNR)}, device=device)
-        evaluator.run(test_loader)
-        performance = evaluator.state.metrics
-        for metric in metrics_printed:
-            logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric, performance[metric].item()))
-        if nscale:
-            dataset = PCSRfDataset(args, nscale-1)
-            loader = DataLoader(dataset)
-            evaluator = create_supervised_evaluator(model, metrics={'PCSR_performance': PCSRPerformance1(args, nscale-1)}, device=device)
-            evaluator.run(loader)
-            performance = evaluator.state.metrics
-            for metric in metrics_printed:
-                logger.log.info('{}, {}: {:.5f}'.format(args.dataset, metric, performance[metric].item()))
-        list_basefile = glob.glob('{}/*base.ply'.format(os.path.abspath(args.output_path)))
-        list_basefile.sort()
-        for base_pc in list_basefile:
-            enc = base_pc[:-4]+'_enc.ply'
-            bin = base_pc[:-4]+'.bin'
-            dec = base_pc[:-4]+'_dec.ply'
-            tmc3 = 'tmc3v22' # 'tmc3', or other base compressors
-            cmd_encode = './'+tmc3+' --config=cfg_base/encoder.cfg --uncompressedDataPath='+base_pc+' --reconstructedDataPath='+enc+' --compressedStreamPath='+bin+' --disableAttributeCoding=1'
-            cmd_decode = './'+tmc3+' --config=cfg_base/decoder.cfg --compressedStreamPath='+bin+' --reconstructedDataPath='+dec
-            r = sh(cmd_encode) 
-            logger.log.info(r)
-            r = sh(cmd_decode) 
-            logger.log.info(r)
-            # r = sh('md5sum {} > {}'.format(enc, base_pc[:-4]+'_enc.txt')) 
-            # r = sh('md5sum {} > {}'.format(dec, base_pc[:-4]+'_dec.txt')) 
-        return
-    else:
-        train_dataset = PCSRDataset(args, status='train')
-        train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, 
-                                  num_workers=32, pin_memory=True)  
-        val_loader = DataLoader(train_dataset, batch_size=5*args.batch_size, 
-                                num_workers=32, pin_memory=True)    
+    train_dataset = PCSRDataset(args, status='train')
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, 
+                                num_workers=32, pin_memory=True)  
+    val_loader = DataLoader(train_dataset, batch_size=5*args.batch_size, 
+                            num_workers=32, pin_memory=True)    
+    
     optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay) 
     scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
     loss_func = PCSRLoss()
@@ -145,6 +103,65 @@ def sh(cmd, input=''): # Solve the issue that logging cannot get the stdout of o
     assert rst.returncode == 0, rst.stderr.decode('utf-8')
     return rst.stdout.decode('utf-8')
 
+def encode_pc(args):
+    # process org point cloud to base point cloud
+    dynamic_pc = False
+    if '.ply' in args.dataset: # static pc
+        dynamic_pc = False
+    else:  # dynamic pc
+        args.evaluate = True
+        dynamic_pc = True
+
+    if dynamic_pc:
+        test_dataset = PCSRDataset(args, status='test')
+        test_loader = DataLoader(test_dataset, num_workers=32, pin_memory=True)   
+        for idx, (neighs, (childs, dist_points, name)) in enumerate(test_loader):
+            print()
+
+    activation, D, base_channel, num_layers, pqs = args.activation, args.D, args.base_channel, args.num_layers, args.pqs
+    trained_model_file = 'checkpoints/' + args.f_str + '_cbytes.bin'
+    
+    # compress base point cloud
+    list_basefile = glob.glob('{}/*base.ply'.format(os.path.abspath(args.output_path)))
+    list_basefile.sort()
+    bin_sizes = []
+    for base_pc in list_basefile:
+        bin = base_pc[:-4]+'.bin'
+        enc = base_pc[:-4]+'_enc.ply'
+        tmc3 = 'tmc3v22' # 'tmc3', or other base compressors
+        cmd_encode = './'+tmc3+' --config=cfg_base/encoder.cfg --uncompressedDataPath='+base_pc+' --reconstructedDataPath='+enc+' --compressedStreamPath='+bin+' --disableAttributeCoding=1'
+        r = sh(cmd_encode) 
+        logger.log.info(r)
+
+        bin_size = os.path.getsize(bin)
+        bin_sizes.append(bin_size)
+    
+    # write header 
+    model_size = os.path.getsize(trained_model_file)
+    fs = '{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_ppqs{}_pqs{}.bs'
+    bs_str = fs.format(args.dataset, args.base_channel, args.num_layers, args.D, 
+                           args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
+                           args.activation, args.ppqs, args.pqs)
+    ppqs = args.ppqs
+    bitstream = os.path.join(args.outputstream, bs_str)
+    with open(bitstream, 'wb') as fout:
+        write_ints(fout, (len(activation),))
+        write_uchars(fout, activation.encode('ascii'))
+        write_floats(fout, (ppqs,))
+        write_ints(fout, (D, base_channel, num_layers, pqs, model_size, len(bin_sizes)))
+        write_ints(fout, bin_sizes)
+
+    # write file data
+    subprocess.call(f'cat {trained_model_file} >> {bitstream}', shell=True)
+
+    list_basefile = glob.glob('{}/*base.bin'.format(os.path.abspath(args.output_path)))
+    list_basefile.sort()
+    for base_pc in list_basefile:
+        bin = base_pc[:-4]+'.bin'
+        subprocess.call(f'cat {bin} >> {bitstream}', shell=True)
+
+    return
+
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='LSRN-PCGC')
@@ -153,6 +170,8 @@ if __name__ == '__main__':
                         help='Allow randomness during training?')
     parser.add_argument('-pc', '--pointcloud', default='redandblack', type=str,
                         help='point cloud full path or point cloud seq. full dir')
+    parser.add_argument('-os', '--outputstream', default='outputs', type=str,
+                        help='output bitstream file dir full path')
     parser.add_argument('-ppqs', '--ppqs', type=float, default=1,
                         help='pre pqs (default: 1), not excute pre pqs')
     parser.add_argument('-pqs', '--pqs', type=int, default=2,
@@ -210,10 +229,9 @@ if __name__ == '__main__':
     args.trained_model_file = 'checkpoints/' + args.f_str
     args.output_path = 'outputs/' + args.f_str
     if not os.path.exists(args.output_path): os.makedirs(args.output_path)
-    if args.evaluate:
-        logger.create_logger('logs_eval', args.f_str)
-    else:
-        logger.create_logger('logs', args.f_str)
+
+    logger.create_logger('logs', args.f_str)
     logger.log.info(args)
     train(args)
+    encode_pc(args)
     

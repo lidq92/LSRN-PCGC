@@ -1,3 +1,4 @@
+import os
 import logger
 import subprocess
 import numpy as np
@@ -31,11 +32,14 @@ class PCSRPerformance1(Metric):
     def __init__(self, args, nscale, computePSNR=True):
         super(PCSRPerformance1, self).__init__()
         if '.ply' in args.dataset: # static pc
-            self.ori_path = 'data'
+            # self.ori_path = 'data'
+            self.ori_path = os.path.dirname(args.pointcloud)
         else: # dynamic pc
-            self.ori_path = 'data/{}'.format(args.dataset)
+            # self.ori_path = 'data/{}'.format(args.dataset)
+            self.ori_path = '{}'.format(args.pointcloud)
         self.output_path = args.output_path
         self.res = 2**args.vox-1
+        self.ppqs = args.ppqs
         self.nscale = nscale
         self.computePSNR = computePSNR
 
@@ -61,6 +65,7 @@ class PCSRPerformance1(Metric):
         if self.nscale: cloud.to_file('{}/{}_preinv_output_scale{}.ply'.format(self.output_path, name, self.nscale), as_text=True)
         if self.computePSNR:
             if self.nscale: points = points*(2**self.nscale)
+            if self.ppqs > 1.0: points = np.round(points/self.ppqs+1e-6).astype(int)
             cloud = PyntCloud(pd.DataFrame(data=points.astype(float), columns=['x', 'y', 'z']))
             cloud.to_file('{}/{}_output_scale{}.ply'.format(self.output_path, name, self.nscale), as_text=True)
             cmd = './pc_error -a '+'{}/{}.ply'.format(self.ori_path, name)+' -b '+'{}/{}_output_scale{}.ply'.format(self.output_path, name, self.nscale)+' -c 1 -l 1 -d 1 --nbThreads=10 --dropdups=2  --neighborsProc=1 -r '+str(self.res)
