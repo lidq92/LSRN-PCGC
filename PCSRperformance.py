@@ -20,7 +20,7 @@ class PCSRPerformance(Metric):
         idx1 = y_pred.max(dim=1)[0]>=0.5
         idx2 = y_pred.max(dim=1)[0]<0.5
         y_pred[idx1] = (y_pred[idx1]>=0.5).float() 
-        y_pred[idx2] = (y_pred[idx2]>=y_pred.max()).float() #
+        y_pred[idx2] = (y_pred[idx2] >= y_pred[idx2].max(dim=1, keepdim=True)[0]).float() # At least one interpolated point
         self._count += (y_pred*y+(1-y_pred)*(1-y)).sum().item()
         self._n     +=  y.numel()
         
@@ -51,7 +51,7 @@ class PCSRPerformance1(Metric):
         idx1 = y_pred.max(dim=1)[0]>=0.5
         idx2 = y_pred.max(dim=1)[0]<0.5
         y_pred[idx1] = (y_pred[idx1]>=0.5).float() 
-        y_pred[idx2] = (y_pred[idx2]>=y_pred.max()).float() #
+        y_pred[idx2] = (y_pred[idx2] >= y_pred[idx2].max(dim=1, keepdim=True)[0]).float() # At least one interpolated point
         acc = (y_pred*y+(1-y_pred)*(1-y)).sum().item()/y.numel()
         self._acc.append(acc)
         y_pred = y_pred.reshape(-1).to('cpu').numpy()
