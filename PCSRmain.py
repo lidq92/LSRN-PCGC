@@ -151,8 +151,10 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=19920517)
     parser.add_argument('-rn', '--randomness', action='store_true',
                         help='Allow randomness during training?')
-    parser.add_argument('-pc', '--dataset', default='redandblack', type=str,
-                        help='point cloud path or point cloud seq. dir')
+    parser.add_argument('-pc', '--pointcloud', default='redandblack', type=str,
+                        help='point cloud full path or point cloud seq. full dir')
+    parser.add_argument('-ppqs', '--ppqs', type=float, default=1,
+                        help='pre pqs (default: 1), not excute pre pqs')
     parser.add_argument('-pqs', '--pqs', type=int, default=2,
                         help=' (default: 2)')
     parser.add_argument('-model', '--model', default='LSRN', type=str,
@@ -184,6 +186,7 @@ if __name__ == '__main__':
     parser.add_argument('-olrd', '--overall_lr_decay', type=float, default=0.01,
                         help='overall lr decay (default: 0.01)')
     args = parser.parse_args()
+    args.dataset = os.path.basename(args.pointcloud)
     if 'vox12' in args.dataset:
         args.vox = 12
     else:
@@ -199,10 +202,10 @@ if __name__ == '__main__':
         np.random.seed(args.seed)
         random.seed(args.seed)
     torch.utils.backcompat.broadcast_warning.enabled = True
-    fs = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}'
+    fs = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_ppqs{}_pqs{}'
     args.f_str = fs.format(args.model, args.activation, args.base_channel, args.num_layers, args.D, 
                            args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, 
-                           args.dataset, args.pqs)
+                           args.dataset, args.ppqs, args.pqs)
     if not os.path.exists('checkpoints'): os.makedirs('checkpoints')
     args.trained_model_file = 'checkpoints/' + args.f_str
     args.output_path = 'outputs/' + args.f_str
