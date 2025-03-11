@@ -24,7 +24,8 @@ parser.add_argument('-bs', '--batch_size', type=int, default=2048,
 parser.add_argument('-e', '--epochs', type=int, default=150,
                     help='number of epochs to train (default: 150)')
 args = parser.parse_args()
-logpath = 'logs_eval/' # eval
+# logpath = 'logs_eval/' # eval
+logpath = 'logs/'
 fs_base = '{}_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}'
 format_str  = fs_base.format(args.model, args.activation, args.base_channel, args.num_layers, args.D, 
                         args.precision, args.lr, args.frame_sampling_rate, args.batch_size, args.epochs)
@@ -37,7 +38,7 @@ datasetname_lst = list([
 	'longdress',
 	'basketball_player_vox11',
 	'dancer_vox11',
-#     'queen_frame_0200_n.ply',
+    # 'queen_frame_0200_n.ply',
 ])
 pqs_lst = list([
 	64,
@@ -53,7 +54,11 @@ output = open('{}.txt'.format(format_str), 'w')
 file_lst = list()
 for name in datasetname_lst:
     for pqs in pqs_lst:
-        file_lst.append(logpath+format_str+'_{}_pqs{}'.format(name, pqs))
+        # file_lst.append(logpath+format_str+'_{}_pqs{}'.format(name, pqs))
+        fs_base = 'decompress_{}_bc{}_nl{}_D{}_p{}_lr{}_fsr{}_bs{}_e{}_{}_pqs{}.log'
+        file = logpath+fs_base.format(name, 32, args.num_layers, args.D, args.precision,        # dynamic pc bc value is default 
+                                args.lr, args.frame_sampling_rate, args.batch_size, args.epochs, args.activation, pqs)
+        file_lst.append(file)
 row = 0
 col = 0
 missed = 0
@@ -86,7 +91,7 @@ for k, file_name in enumerate(file_lst):
         D2 = D2 / nF
     except IOError:
         print('No files found!')
-    base = int(base / 2) # encoder+decoder
+    # base = int(base / 2) # encoder+decoder
     geom = base + netparam  
     total = geom
     print(points, geom, base, netparam, D1, D2)

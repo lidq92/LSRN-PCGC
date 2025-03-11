@@ -9,6 +9,29 @@ from pyntcloud import PyntCloud
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 
+cls_masks = {
+    0: [0, 0, 0, 0, 0, 0, 0, 0],  # 类型0，
+    1: [0, 0, 0, 1, 0, 0, 0, 1],  # 类型1，2位有效
+    2: [0, 0, 0, 0, 0, 1, 0, 1],  # 类型2，2位有效
+    4: [0, 0, 0, 0, 0, 0, 1, 1],  # 类型3，2位有效
+    3: [0, 1, 0, 1, 0, 1, 0, 1],  # 类型4，4位有效
+    5: [0, 0, 1, 1, 0, 0, 1, 1],  # 类型5，4位有效
+    6: [0, 0, 0, 0, 1, 1, 1, 1],  # 类型6，4位有效
+    7: [1, 1, 1, 1, 1, 1, 1, 1],  # 类型7，全部有效
+}
+
+def fill_data(data, mask):
+    result = [0] * len(mask)
+    positions = [i for i, val in enumerate(mask) if val == 1]
+    
+    if len(data) != len(positions):
+        raise ValueError("Data length must match the number of 1s in mask")
+    
+    for idx, pos in enumerate(positions):
+        result[pos] = data[idx]
+    
+    return result
+
 def get_divisor(pqs):
     # 1 < s < 2
     p = pqs[0]
@@ -84,13 +107,16 @@ def process(arg):
                     dist_points[i][1]+D-dres_m[1], 
                     dist_points[i][2]+D-dres_m[2]] = 1 
 
-    neighs = [[] for _ in range(8)]
-    childs = [[] for _ in range(8)]
+    neighs = []
+    childs = []
+    masks = []
     for i in range(len(dist_points)):
         [x, y, z] = [dist_points[i][j] for j in range(3)]
         ori_x, ori_y, ori_z = np.round(x*pqs+1e-6).astype(int), np.round(y*pqs+1e-6).astype(int), np.round(z*pqs+1e-6).astype(int)
         child, point_cls = get_child_cls(q, dup, x_ch, [x, y, z])
         if point_cls == 0:
+            continue
+        if point_cls != 7:   # 单独训练某类 
             continue
 
         tmp_neighs = np.zeros((1, (2*D+1)**3-1))
@@ -98,19 +124,21 @@ def process(arg):
                                  y-dres_m[1]:y+2*D+1-dres_m[1],
                                  z-dres_m[2]:z+2*D+1-dres_m[2]].reshape(-1)
         tmp_neighs = np.delete(tmp_neighs, (2*D+1)**3//2).reshape(-1) # remove the occupied center
-        neighs[point_cls].append(tmp_neighs)  
+        neighs.append(tmp_neighs)  
 
         tmp_childs = np.zeros((1, 8))
         tmp_childs = ori_voxels[ori_x-res_m[0]+1-abs(child[0]):ori_x+2-res_m[0],
                                 ori_y-res_m[1]+1-abs(child[1]):ori_y+2-res_m[1],
                                 ori_z-res_m[2]+1-abs(child[2]):ori_z+2-res_m[2]].reshape(-1)             
-        childs[point_cls].append(tmp_childs)
+        childs.append(fill_data(tmp_childs, cls_masks[point_cls]))
+
+        masks.append(cls_masks[point_cls])
     cloud = PyntCloud(pd.DataFrame(data=dist_points.astype(float), columns=['x', 'y', 'z']))
     name = os.path.splitext(os.path.split(path)[1])[0]
     if not os.path.exists('{}/{}_base.ply'.format(output_path, name)):
         cloud.to_file('{}/{}_base.ply'.format(output_path, name), as_text=True)
 
-    return neighs, childs
+    return neighs, childs, masks
 
 
 class PCSRDataset(Dataset):
@@ -123,6 +151,7 @@ class PCSRDataset(Dataset):
         self.output_path = args.output_path
         self.neighs = []
         self.childs = []
+        self.masks = []
         if '.ply' in args.dataset: # static pc
             # self.paths = ['data/{}'.format(args.dataset)]
             self.paths = ['{}'.format(args.pointcloud)]
@@ -137,6 +166,7 @@ class PCSRDataset(Dataset):
         if self.status == 'train':
             neighs = []
             childs = []
+            masks = []
             num_cores = psutil.cpu_count(logical=False)
             if num_cores>len(self.paths): num_cores = len(self.paths)
             zip_args = list(zip(self.paths, 
@@ -150,50 +180,46 @@ class PCSRDataset(Dataset):
             neighschilds = pool.map(process, zip_args)
             neighs.extend(neighschilds[0][0])
             childs.extend(neighschilds[0][1])
+            masks.extend(neighschilds[0][2])
             pool.close()
             pool.join()
             neighs_tensors = []
-            for sublist in neighs:
-                if sublist: 
-                    tensors = [torch.tensor(item, dtype=torch.float32) for item in sublist]
-                    neighs_tensors.append(pad_sequence(tensors, batch_first=True))
-                else:  
-                    neighs_tensors.append(torch.zeros(1, 1)) 
+            if neighs: 
+                neighs_tensors = [torch.tensor(item, dtype=torch.float32) for item in neighs]
+            else:  
+                neighs_tensors = torch.zeros(1, 1)
             childs_tensors = []
-            for sublist in childs:
-                if sublist: 
-                    tensors = [torch.tensor(item, dtype=torch.float32) for item in sublist]
-                    childs_tensors.append(pad_sequence(tensors, batch_first=True))
-                else:  
-                    childs_tensors.append(torch.zeros(1, 1)) 
+            if childs: 
+                childs_tensors = [torch.tensor(item, dtype=torch.float32) for item in childs]
+            else:  
+                childs_tensors = torch.zeros(1, 1)
+            masks_tensors = []
+            if childs: 
+                masks_tensors = [torch.tensor(item, dtype=torch.float32) for item in masks]
+            else:  
+                masks_tensors = torch.zeros(1, 1)                
 
             self.neighs = neighs_tensors
             self.childs = childs_tensors
+            self.masks = masks_tensors
 
     def __len__(self):
-        # return len(self.neighs) if self.status == 'train' else len(self.paths)
-        return len(self.neighs[self.cls]) if self.status == 'train' else len(self.paths)
+        return len(self.neighs) if self.status == 'train' else len(self.paths)
+        # return len(self.neighs[self.cls]) if self.status == 'train' else len(self.paths)
     
     def __getitem__(self, idx):  
         if self.status == 'train':
-            neighs = self.neighs[self.cls][idx]
-            childs = self.childs[self.cls][idx]
-            return neighs, childs
+            neighs = self.neighs[idx]
+            childs = self.childs[idx]
+            masks = self.masks[idx]
+            return neighs, childs, masks
         else:
             if len(self.neighs) <= 0:
                 self.neighs, self.childs = process((self.paths[idx], self.ppqs, self.pqs, self.D, self.output_path, 1))
-            neighs = self.neighs[self.cls][idx]
-            childs = self.childs[self.cls][idx]
-            return neighs.astype(np.float32), childs.astype(np.float32)
-            
-
-    def set_cls(self, cls):
-        self.cls = cls
-        ret_len = 0
-        if len(self.neighs) > 0:
-            ret_len = len(self.neighs[self.cls])
-
-        return ret_len
+            neighs = self.neighs[idx]
+            childs = self.childs[idx]
+            masks = self.masks[idx]
+            return neighs.astype(np.float32), childs.astype(np.float32), masks.astype(np.float32)
     
 
 def process2neighs(base_points, D, pqs):

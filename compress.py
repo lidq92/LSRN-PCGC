@@ -35,83 +35,68 @@ def train(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, 
                                 num_workers=32, pin_memory=True)  
     val_loader = DataLoader(train_dataset, batch_size=5*args.batch_size, 
-                            num_workers=32, pin_memory=True)   
-    for model_cls in range(8):
-        if model_cls == 0:          # 0 : no need to train
-            continue
-
-        data_num = train_dataset.set_cls(model_cls)
-        # val_num = val_dataset.set_cls(model_cls)
-        if data_num <= 1:
-            continue
-        
-        if model_cls == 1 or model_cls == 2 or model_cls == 4 :
-            dim_out = 2
-        elif model_cls == 3 or model_cls == 5 or model_cls == 6 :
-            dim_out = 4
-        else :
-            dim_out = 8
-
-        model = PCSRModelSiren(dim_in=(2*args.D+1)**3-1, 
-                            dim_hidden=args.base_channel, 
-                            dim_out=dim_out,
-                            num_layers=args.num_layers,
-                            activation=activation)
-        model = model.to(device)
-        logger.log.info('begin to train NO.{} model'.format(model_cls))
-        logger.log.info(model)
-        for param_tensor in model.state_dict():
-            logger.log.info('{}\t {}'.format(param_tensor, model.state_dict()[param_tensor].size()))
-        total_params = sum(p.numel() for p in model.parameters())
-        logger.log.info('total_params: {}'.format(total_params))
-        
-        optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay) 
-        scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
-        loss_func = PCSRLoss()
-        trainer = create_supervised_trainer(model, optimizer, loss_func, device=device)
-        evaluator = create_supervised_validator(model, metrics={'PCSR_performance': PCSRPerformance()}, device=device)
-        current_time = datetime.datetime.now().strftime('%I:%M%p on %B %d, %Y')
-        writer = SummaryWriter(log_dir='runs/{}-{}'.format(args.f_str, current_time))
-        global best_val_criterion, best_epoch
-        best_val_criterion, best_epoch = 0., -1 
-        @trainer.on(Events.ITERATION_COMPLETED)
-        def iter_event_function(engine):
-            writer.add_scalar('train/loss', engine.state.output, engine.state.iteration)
-        @trainer.on(Events.EPOCH_COMPLETED)
-        def epoch_event_function(engine):
-            scheduler.step()
-            if engine.state.epoch % 5 == 0: # True # 
-                evaluator.run(val_loader)
-                performance = evaluator.state.metrics
-                writer_add_scalar(writer, 'val', args.dataset, performance, engine.state.epoch)
-                val_criterion = performance['mAcc']
-                global best_val_criterion, best_epoch
-                if val_criterion > best_val_criterion: 
-                    torch.save(model.state_dict(), args.trained_model_file)
-                    best_val_criterion = val_criterion
-                    best_epoch = engine.state.epoch
-                    logger.log.info('Save current best val model (mAcc: {:.5f}) @epoch {}'
-                                    .format(best_val_criterion, best_epoch))
-                else:
-                    logger.log.info('Model is not updated (mAcc: {:.5f}) @epoch: {}'
-                                    .format(val_criterion, engine.state.epoch))           
-        @trainer.on(Events.COMPLETED)
-        def final_testing_results(engine):
-            writer.close ()  
-            logger.log.info('best epoch: {}'.format(best_epoch))
-            model.load_state_dict(torch.load(args.trained_model_file))
-            params = None
-            for param_tensor in model.state_dict(): #
-                if params is None:
-                    params = model.state_dict()[param_tensor].data.to('cpu').numpy().reshape(-1)
-                else:
-                    params = np.concatenate((params, model.state_dict()[param_tensor].data.to('cpu').numpy().reshape(-1)))
-            compressed_bytes = fpzip.compress(params, precision=args.precision, order='C')
-            f = open(args.trained_model_file+'_'+str(model_cls)+'_cbytes.bin', 'wb')
-            f.write(compressed_bytes)
-            f.close()
-            logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_'+str(model_cls)+'_cbytes.bin')))
-        trainer.run(train_loader, max_epochs=args.epochs)
+                            num_workers=32, pin_memory=True)  
+     
+    model = PCSRModelSiren(dim_in=(2*args.D+1)**3-1, 
+                    dim_hidden=args.base_channel, 
+                    num_layers=args.num_layers,
+                    activation=activation)
+    model = model.to(device)
+            
+    logger.log.info('begin to train')
+    logger.log.info(model)
+    for param_tensor in model.state_dict():
+        logger.log.info('{}\t {}'.format(param_tensor, model.state_dict()[param_tensor].size()))
+    total_params = sum(p.numel() for p in model.parameters())
+    logger.log.info('total_params: {}'.format(total_params))
+    
+    optimizer = Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay) 
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=args.lr_decay_step, gamma=args.lr_decay)
+    loss_func = PCSRLoss()
+    trainer = create_supervised_trainer(model, optimizer, loss_func, device=device)
+    evaluator = create_supervised_validator(model, metrics={'PCSR_performance': PCSRPerformance()}, device=device)
+    current_time = datetime.datetime.now().strftime('%I:%M%p on %B %d, %Y')
+    writer = SummaryWriter(log_dir='runs/{}-{}'.format(args.f_str, current_time))
+    global best_val_criterion, best_epoch
+    best_val_criterion, best_epoch = 0., -1 
+    @trainer.on(Events.ITERATION_COMPLETED)
+    def iter_event_function(engine):
+        writer.add_scalar('train/loss', engine.state.output, engine.state.iteration)
+    @trainer.on(Events.EPOCH_COMPLETED)
+    def epoch_event_function(engine):
+        scheduler.step()
+        if engine.state.epoch % 5 == 0: # True # 
+            evaluator.run(val_loader)
+            performance = evaluator.state.metrics
+            writer_add_scalar(writer, 'val', args.dataset, performance, engine.state.epoch)
+            val_criterion = performance['mAcc']
+            global best_val_criterion, best_epoch
+            if val_criterion > best_val_criterion: 
+                torch.save(model.state_dict(), args.trained_model_file)
+                best_val_criterion = val_criterion
+                best_epoch = engine.state.epoch
+                logger.log.info('Save current best val model (mAcc: {:.5f}) @epoch {}'
+                                .format(best_val_criterion, best_epoch))
+            else:
+                logger.log.info('Model is not updated (mAcc: {:.5f}) @epoch: {}'
+                                .format(val_criterion, engine.state.epoch))           
+    @trainer.on(Events.COMPLETED)
+    def final_testing_results(engine):
+        writer.close ()  
+        logger.log.info('best epoch: {}'.format(best_epoch))
+        model.load_state_dict(torch.load(args.trained_model_file))
+        params = None
+        for param_tensor in model.state_dict(): #
+            if params is None:
+                params = model.state_dict()[param_tensor].data.to('cpu').numpy().reshape(-1)
+            else:
+                params = np.concatenate((params, model.state_dict()[param_tensor].data.to('cpu').numpy().reshape(-1)))
+        compressed_bytes = fpzip.compress(params, precision=args.precision, order='C')
+        f = open(args.trained_model_file+'_cbytes.bin', 'wb')
+        f.write(compressed_bytes)
+        f.close()
+        logger.log.info('network parameter bitstream: {} bits'.format(8*os.path.getsize(args.trained_model_file+'_cbytes.bin')))
+    trainer.run(train_loader, max_epochs=args.epochs) #args.epochs)
 
 
 def sh(cmd, input=''): # Solve the issue that logging cannot get the stdout of os.system
@@ -139,10 +124,10 @@ def encode_pc(args):
     trained_model_files = []
     trained_model_sizes = []
     model_clses = []
-    for model_cls in range(8):
+    for model_cls in range(2):
         if model_cls == 0:          # 0 : no need to train
             continue
-        trained_model_file = 'checkpoints/' + args.f_str + '_'+str(model_cls)+ '_cbytes.bin'
+        trained_model_file = 'checkpoints/' + args.f_str + '_cbytes.bin'
         if os.path.exists(trained_model_file):
             model_clses.append(model_cls)
             trained_model_files.append(trained_model_file)
@@ -157,7 +142,7 @@ def encode_pc(args):
     for base_pc in list_basefile:
         bin = base_pc[:-4]+'.bin'
         enc = base_pc[:-4]+'_enc.ply'
-        tmc3 = 'tmc3v27' # 'tmc3', or other base compressors
+        tmc3 = 'tmc3v23' # 'tmc3', or other base compressors
         cmd_encode = './'+tmc3+' --config=cfg_base/encoder.cfg --uncompressedDataPath='+base_pc+' --reconstructedDataPath='+enc+' --compressedStreamPath='+bin+' --disableAttributeCoding=1'
         r = sh(cmd_encode) 
         logger.log.info(r)

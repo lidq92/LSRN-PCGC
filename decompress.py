@@ -24,6 +24,29 @@ def inference(model, x, points, device, pqs, cls):
     with torch.no_grad():
         y_pred = model(x)
 
+    if cls == 1:            # two childs, x-axis
+        selected_columns = [3, 7]  
+        y_pred = y_pred[:, selected_columns]                                                           
+    elif cls == 2:          # two childs, y-axis
+        selected_columns = [5, 7]
+        y_pred = y_pred[:, selected_columns]                                       
+    elif cls == 4:          # two childs, z-axis
+        selected_columns = [6, 7]
+        y_pred = y_pred[:, selected_columns]
+    elif cls == 3:          # four childs, x,y-axis
+        selected_columns = [1, 3, 5, 7]
+        y_pred = y_pred[:, selected_columns]                         
+    elif cls == 5:          # four childs, x,z-axis
+        selected_columns = [2, 3, 6, 7]
+        y_pred = y_pred[:, selected_columns]
+    elif cls == 6:          # four childs, y,z-axis
+        selected_columns = [4, 5, 6, 7]
+        y_pred = y_pred[:, selected_columns]
+    elif cls == 7:          # eight childs, x,y,z-axis
+        pass
+    else:
+        logger.log.info('point class error, cls : {cls} ')    
+
     idx1 = y_pred.max(dim=1)[0]>=0.5
     idx2 = y_pred.max(dim=1)[0]<0.5
     y_pred[idx1] = (y_pred[idx1]>=0.5).float() 
@@ -116,21 +139,21 @@ def decompress(args):
         if model_cls == 0:          # 0 : no need to train
             continue
               
-        if model_cls == 1 or model_cls == 2 or model_cls == 4 :
-            dim_out = 2
-        elif model_cls == 3 or model_cls == 5 or model_cls == 6 :
-            dim_out = 4
-        else :
-            dim_out = 8
+        # if model_cls == 1 or model_cls == 2 or model_cls == 4 :
+        #     dim_out = 2
+        # elif model_cls == 3 or model_cls == 5 or model_cls == 6 :
+        #     dim_out = 4
+        # else :
+        #     dim_out = 8
 
         model = PCSRModelSiren(dim_in=(2*D+1)**3-1, 
                             dim_hidden=base_channel, 
-                            dim_out=dim_out,
+                            # dim_out=dim_out,
                             num_layers=num_layers,
                             activation=activation)
         model = model.to(device)
 
-        with open(trained_model_files[model_file_idx],'rb') as f: compressed_bytes = f.read()
+        with open(trained_model_files[0],'rb') as f: compressed_bytes = f.read()
         params = fpzip.decompress(compressed_bytes, order='C')[0][0][0]
         k = 0
         state_dict = {}
@@ -148,7 +171,7 @@ def decompress(args):
         bin_file = bin_filenames[i]
         dec = gen_tmpfile_name()
         # 2. decode base point cloud
-        tmc3 = 'tmc3v27' # 'tmc3', or other base compressors
+        tmc3 = 'tmc3v23' # 'tmc3', or other base compressors
         cmd_decode = './'+tmc3+' --config=cfg_base/decoder.cfg --compressedStreamPath='+bin_file+' --reconstructedDataPath='+dec
         r = sh(cmd_decode) 
         logger.log.info(r)    
@@ -167,15 +190,26 @@ def decompress(args):
                     enhanced_point = np.round(cls_points[model_cls]*(pqs[0]/pqs[1])+1e-6).astype(int)
                     enhanced_points.append(enhanced_point)
             else:
-                if model_cls in model_clses:
+                # if True:   # if model_cls in model_clses:
+                if len(cls_points[model_cls]) > 1:
                     if(pqs[0]/pqs[1]) <= 2:
                         enhanced_point = inference(models[model_idx], cls_neighs[model_cls], cls_points[model_cls], device, (pqs[0]/pqs[1]), model_cls)
                     else:
                         enhanced_point = inference(models[model_idx], cls_neighs[model_cls], cls_points[model_cls], device, 2, model_cls)
+                        '''
                         enhanced_point = np.round(enhanced_point*(pqs[0]/pqs[1]/2)+1e-6).astype(int)
-                    model_idx = model_idx + 1
+                        '''
+                        nscale = np.ceil(np.log2((pqs[0]/pqs[1])/2)).astype(int) # nscale
+                        if nscale:
+                            cls_neighs, cls_points = process2neighs(enhanced_point, D, pqs)
+                            enhanced_point = inference(models[model_idx], cls_neighs[model_cls], cls_points[model_cls], device, 2, model_cls)
+                            scale = (pqs[0]/pqs[1]) / 4
+                            if scale > 0:
+                                enhanced_point = np.round(enhanced_point*scale+1e-6).astype(int)
+                        # '''
+                    # model_idx = model_idx + 1
                     enhanced_points.append(enhanced_point)
-        
+
         points = np.vstack(enhanced_points)
         points = np.unique(points, axis=0) #  
 

@@ -1,6 +1,7 @@
 import os
 import logger
 import subprocess
+import torch
 import numpy as np
 import pandas as pd
 from pyntcloud import PyntCloud
@@ -16,14 +17,17 @@ class PCSRPerformance(Metric):
         self._n     = 0
 
     def update(self, output):
-        y_pred, y = output
+        y_pred, y, mask = output
         idx1 = y_pred.max(dim=1)[0]>=0.5
         idx2 = y_pred.max(dim=1)[0]<0.5
         y_pred[idx1] = (y_pred[idx1]>=0.5).float() 
         # y_pred[idx2] = (y_pred[idx2]>=y_pred.max()).float() 
         y_pred[idx2] = (y_pred[idx2] >= y_pred[idx2].max(dim=1, keepdim=True)[0]).float()
-        self._count += (y_pred*y+(1-y_pred)*(1-y)).sum().item()
-        self._n     +=  y.numel()
+        # self._count += (y_pred*y+(1-y_pred)*(1-y)).sum().item()
+        correct = y_pred * y + (1 - y_pred) * (1 - y)
+        masked_correct = correct * mask
+        self._count += masked_correct.sum().item()
+        self._n     +=  y[mask.type(torch.bool)].numel()
         
     def compute(self):
         return {'mAcc': np.asarray(self._count/self._n)}
