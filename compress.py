@@ -114,11 +114,11 @@ def encode_pc(args):
         args.evaluate = True
         dynamic_pc = True
 
-    if dynamic_pc:
-        test_dataset = PCSRDataset(args, status='test')
-        test_loader = DataLoader(test_dataset, num_workers=32, pin_memory=True)   
-        for idx, (neighs, (childs, dist_points, name)) in enumerate(test_loader):
-            print()
+    # if dynamic_pc:
+    #     test_dataset = PCSRDataset(args, status='test')
+    #     test_loader = DataLoader(test_dataset, num_workers=32, pin_memory=True)   
+    #     for idx, (neighs, childs, masks) in enumerate(test_loader):
+    #         print()
 
     activation, D, base_channel, num_layers = args.activation, args.D, args.base_channel, args.num_layers
     trained_model_files = []

@@ -215,11 +215,12 @@ class PCSRDataset(Dataset):
             return neighs, childs, masks
         else:
             if len(self.neighs) <= 0:
-                self.neighs, self.childs = process((self.paths[idx], self.ppqs, self.pqs, self.D, self.output_path, 1))
+                self.neighs, self.childs, self.masks = process((self.paths[idx], self.ppqs, self.pqs, self.D, self.output_path, 1))  # path, ppqs, pqs, D, output_path, core_id
             neighs = self.neighs[idx]
             childs = self.childs[idx]
             masks = self.masks[idx]
-            return neighs.astype(np.float32), childs.astype(np.float32), masks.astype(np.float32)
+            # return neighs.astype(np.float32), childs.astype(np.float32), masks.astype(np.float32)
+            return neighs, childs, masks
     
 
 def process2neighs(base_points, D, pqs):
